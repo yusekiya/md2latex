@@ -85,6 +85,23 @@ Language is detected by comparing kana+kanji vs. Latin-letter counts.
   semantic label such as `eq:sin_function`).
 - Inline math `$ … $` is unchanged (identical in LaTeX).
 
+## Blank lines & paragraph structure
+
+In LaTeX a blank line starts a new (indented) paragraph, so blank lines are not
+cosmetic. The converter reproduces the source's paragraph structure rather than
+padding every block:
+
+- Between ordinary blocks, a blank line is emitted **only where the source had
+  one**; adjacent blocks stay tight (single newline, same paragraph).
+- A **display-math environment is always tight** with its neighbours (no blank
+  line before/after), so an equation embedded in running text does not split the
+  surrounding paragraph. Markdown usually requires blank lines around `$$`; those
+  are intentionally dropped.
+- `<span></span>` on its own line is an **explicit blank-line marker** (authors
+  use it, e.g. in Obsidian, to force a paragraph break). It is rendered as a kept
+  blank line — never as literal text — and overrides math tightness, so it is the
+  way to force a paragraph break right after an equation.
+
 ## Tables
 
 A blockquote **immediately above** a pipe table is its caption (the leading

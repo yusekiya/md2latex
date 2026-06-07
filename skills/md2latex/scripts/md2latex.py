@@ -241,6 +241,9 @@ BLOCKQUOTE_RE = re.compile(r"^>\s?(.*)$")
 LISTITEM_RE = re.compile(r"^(\s*)([-*+]|\d+[.)])\s+(.*)$")
 SUBPROBLEM_RE = re.compile(r"^\*\*\(([^)]+)\)\*\*\s*(.*)$")
 TABLE_SEP_RE = re.compile(r"^\s*\|?\s*:?-{1,}:?\s*(\|\s*:?-{1,}:?\s*)*\|?\s*$")
+# An explicit blank-line marker authors use (e.g. in Obsidian) to force a blank
+# line; rendered as a kept paragraph break, never as literal text.
+SPAN_RE = re.compile(r"^\s*<span\s*>\s*</span\s*>\s*$")
 
 
 def is_blank(line):
@@ -255,17 +258,37 @@ def is_block_start(line):
         or IMAGE_RE.match(line)
         or BLOCKQUOTE_RE.match(line)
         or LISTITEM_RE.match(line)
+        or SPAN_RE.match(line)
     )
 
 
 def segment(lines):
-    """Split body lines into a list of block dicts."""
+    """Split body lines into a list of block dicts.
+
+    Each block records how it was separated from the previous one in the source:
+    ``blank_before`` (a blank line preceded it) and ``span_before`` (an explicit
+    ``<span></span>`` marker preceded it). The renderer uses these to reproduce
+    the source's paragraph structure instead of forcing blank lines everywhere.
+    """
     blocks = []
     i = 0
     n = len(lines)
+    blank_before = False
+    span_before = False
+
+    def push(block):
+        block["blank_before"] = blank_before
+        block["span_before"] = span_before
+        blocks.append(block)
+
     while i < n:
         line = lines[i]
         if is_blank(line):
+            blank_before = True
+            i += 1
+            continue
+        if SPAN_RE.match(line):
+            span_before = True
             i += 1
             continue
 
@@ -278,58 +301,47 @@ def segment(lines):
                 buf.append(lines[i])
                 i += 1
             i += 1  # consume closing fence
-            blocks.append({"type": "code", "lines": buf})
-            continue
-
-        if line.strip().startswith("$$"):
-            blocks.append(_collect_math(lines, i_ref := [i]))
+            push({"type": "code", "lines": buf})
+        elif line.strip().startswith("$$"):
+            i_ref = [i]
+            push(_collect_math(lines, i_ref))
             i = i_ref[0]
-            continue
-
-        m = HEADING_RE.match(line)
-        if m:
-            blocks.append({"type": "heading", "level": len(m.group(1)),
-                           "text": m.group(2)})
+        elif HEADING_RE.match(line):
+            m = HEADING_RE.match(line)
+            push({"type": "heading", "level": len(m.group(1)), "text": m.group(2)})
             i += 1
-            continue
-
-        m = IMAGE_RE.match(line)
-        if m:
-            blocks.append({"type": "figure",
-                           "file": _image_filename(m),
-                           "caption": None, "human_no": None})
+        elif IMAGE_RE.match(line):
+            m = IMAGE_RE.match(line)
+            push({"type": "figure", "file": _image_filename(m),
+                  "caption": None, "human_no": None})
             i += 1
-            continue
-
-        if BLOCKQUOTE_RE.match(line):
+        elif BLOCKQUOTE_RE.match(line):
             buf = []
             while i < n and BLOCKQUOTE_RE.match(lines[i]):
                 buf.append(BLOCKQUOTE_RE.match(lines[i]).group(1))
                 i += 1
-            blocks.append({"type": "blockquote", "lines": buf})
-            continue
-
-        if "|" in line and i + 1 < n and TABLE_SEP_RE.match(lines[i + 1]):
+            push({"type": "blockquote", "lines": buf})
+        elif "|" in line and i + 1 < n and TABLE_SEP_RE.match(lines[i + 1]):
             tbl, i = _collect_table(lines, i)
-            blocks.append(tbl)
-            continue
-
-        if LISTITEM_RE.match(line):
+            push(tbl)
+        elif LISTITEM_RE.match(line):
             buf = []
             while i < n and (LISTITEM_RE.match(lines[i]) or
                              (not is_blank(lines[i]) and lines[i].startswith((" ", "\t")) and buf)):
                 buf.append(lines[i])
                 i += 1
-            blocks.append({"type": "list", "lines": buf})
-            continue
-
-        # paragraph: until blank or a new block start
-        buf = [line]
-        i += 1
-        while i < n and not is_blank(lines[i]) and not is_block_start(lines[i]):
-            buf.append(lines[i])
+            push({"type": "list", "lines": buf})
+        else:
+            # paragraph: until blank, a span marker, or a new block start
+            buf = [line]
             i += 1
-        blocks.append({"type": "para", "lines": buf})
+            while i < n and not is_blank(lines[i]) and not is_block_start(lines[i]):
+                buf.append(lines[i])
+                i += 1
+            push({"type": "para", "lines": buf})
+
+        blank_before = False
+        span_before = False
     return blocks
 
 
@@ -452,6 +464,25 @@ TAG_RE = re.compile(r"\\tag\{([^}]*)\}")
 ENV_NAME_RE = re.compile(r"\\(?:begin|end)\{([A-Za-z*]+)\}")
 
 
+def _gap_sep(prev_trail_type, block):
+    """Separator to place before `block`, given the previous block's last type.
+
+    In LaTeX a blank line starts a new paragraph, so spacing is meaningful:
+    - an explicit ``<span></span>`` marker -> a blank line (paragraph break),
+      kept even next to math;
+    - a display-math neighbour -> tight (single newline, no blank line) so the
+      equation stays inside its surrounding paragraph instead of splitting it;
+    - otherwise mirror the source: a blank line only where the source had one.
+    """
+    if block.get("span_before"):
+        return "\n\n"
+    if prev_trail_type == "math" or block["type"] == "math":
+        return "\n"
+    if block.get("blank_before"):
+        return "\n\n"
+    return "\n"
+
+
 class Renderer:
     def __init__(self, template, inline, hints):
         self.template = template
@@ -484,7 +515,7 @@ class Renderer:
     # -- top level ----------------------------------------------------------
     def render(self, blocks):
         blocks = self.associate(blocks)
-        out = []
+        units = []  # (text, lead_block, trailing_type)
         i = 0
         while i < len(blocks):
             b = blocks[i]
@@ -495,11 +526,21 @@ class Renderer:
                        and SUBPROBLEM_RE.match(blocks[i]["lines"][0])):
                     run.append(blocks[i])
                     i += 1
-                out.append(self.render_subproblems(run))
+                units.append((self.render_subproblems(run), run[0], run[-1]["type"]))
                 continue
-            out.append(self.render_block(b))
+            units.append((self.render_block(b), b, b["type"]))
             i += 1
-        return "\n\n".join(x for x in out if x is not None and x != "")
+
+        units = [u for u in units if u[0] is not None and u[0] != ""]
+        if not units:
+            return ""
+        parts = [units[0][0]]
+        prev_trail = units[0][2]
+        for text, lead, trail in units[1:]:
+            parts.append(_gap_sep(prev_trail, lead))
+            parts.append(text)
+            prev_trail = trail
+        return "".join(parts)
 
     def render_block(self, b):
         return getattr(self, "r_" + b["type"])(b)
@@ -716,7 +757,7 @@ def assemble(template_dir, title_latex, body_latex):
     if pos == -1:
         raise RuntimeError("template main.tex has no \\maketitle")
     insert_at = pos + len(marker)
-    return main[:insert_at] + "\n\n\n" + body_latex + "\n" + main[insert_at:]
+    return main[:insert_at] + "\n\n" + body_latex + "\n" + main[insert_at:]
 
 
 # ---------------------------------------------------------------------------
