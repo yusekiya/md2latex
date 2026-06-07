@@ -44,6 +44,12 @@ gh skill install yusekiya/md2latex md2latex --agent claude-code --scope user
 (Requires GitHub CLI ≥ 2.90 with the `skill` command. Drop `--scope user` for
 project-local install, or change `--agent` for other agents.)
 
+To update an installed skill to the latest published release:
+
+```bash
+gh skill update
+```
+
 ## Usage
 
 In Claude Code:
@@ -75,6 +81,15 @@ skills/md2latex/        # the installable skill (self-contained)
   templates/            #   general_jp / general_en / exercise
 tests/                  # sample Markdown fixtures (for development)
 CLAUDE.md, .claude/     # developer documentation
+```
+
+## Development
+
+After changing the skill, publish a new release so installs can pick it up:
+
+```bash
+git push
+gh skill publish --tag <tag>   # e.g. v1.0.1
 ```
 
 ## Notes
