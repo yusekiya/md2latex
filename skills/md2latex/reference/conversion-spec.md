@@ -167,6 +167,12 @@ lists candidates as hints. The agent rewrites them:
 - Figure / table refs (e.g. `図1`, `表1`) → `\ref{fig:…}` / `\ref{table:…}`.
 - Section refs (e.g. `第2節`) → add `\label{sec:…}` to the section, then `\ref`.
 - Label prefixes by kind: section `sec:`, equation `eq:`, figure `fig:`, table `table:`.
+- **Always put a non-breaking space `~` between the leading reference word and
+  the macro**, so the word and number never split across a line break:
+  `式~\eqref{eq:…}`, `図~\ref{fig:…}`, `表~\ref{table:…}`,
+  `Eq.~\eqref{eq:…}`, `Fig.~\ref{fig:…}`, `Table~\ref{table:…}`. (When the number
+  is embedded in a word with no leading label, e.g. `第2節` → `第\ref{sec:…}節`,
+  there is no `~` to add.)
 
 ## Footnotes
 

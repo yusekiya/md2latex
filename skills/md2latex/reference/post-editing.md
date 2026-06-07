@@ -28,10 +28,13 @@ numbers and the matched text). For each candidate:
 - Decide whether it is really a cross-reference. **Skip false positives** — e.g.
   the `表1` that appears *inside a caption blockquote* is the source's own
   numbering, not a reference; a bare `(1)` may be an enumeration.
-- Rewrite genuine references:
-  - equation → `\eqref{eq:…}` (keep any surrounding word, e.g. `式\eqref{…}`)
-  - figure → `\ref{fig:…}`, table → `\ref{table:…}`
-  - section → first add `\label{sec:…}` right after that `\section{…}`, then `\ref{sec:…}`
+- Rewrite genuine references, putting a non-breaking space `~` between the
+  leading reference word and the macro (so they never split across a line):
+  - equation → `式~\eqref{eq:…}` (likewise `Eq.~\eqref{eq:…}`)
+  - figure → `図~\ref{fig:…}`, table → `表~\ref{table:…}`
+    (likewise `Fig.~\ref{fig:…}`, `Table~\ref{table:…}`)
+  - section → first add `\label{sec:…}` right after that `\section{…}`, then
+    `\ref{sec:…}` (e.g. `第2節` → `第\ref{sec:…}節`, where no `~` applies)
 - Match by number: the label map ties each source number (`表1`, `\tag{1}`, …)
   to the LaTeX label to use.
 

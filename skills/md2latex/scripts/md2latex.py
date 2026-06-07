@@ -833,7 +833,9 @@ def _print_report(template, reason, tex_out, latexmkrc_out, hints, refs):
     if refs:
         print("", file=e)
         print("  Cross-reference CANDIDATES in body (rewrite to \\eqref/\\ref"
-              " using the label map above; verify each):", file=e)
+              " using the label map above; verify each). Put a non-breaking"
+              " space '~' before the macro, e.g. 式~\\eqref{eq:..}, 図~\\ref{fig:..}:",
+              file=e)
         for line_no, text in refs:
             print(f"    body line {line_no}: {text}", file=e)
     print("=" * 70, file=e)
