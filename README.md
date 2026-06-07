@@ -44,11 +44,16 @@ gh skill install yusekiya/md2latex md2latex --agent claude-code --scope user
 (Requires GitHub CLI ≥ 2.90 with the `skill` command. Drop `--scope user` for
 project-local install, or change `--agent` for other agents.)
 
-To update an installed skill to the latest published release:
+To update the installed skill to the latest published release:
 
 ```bash
-gh skill update
+gh skill update md2latex
 ```
+
+(Run this outside a clone of this repository. `gh skill update` also scans the
+current git repo at project scope, so inside the clone it would try to update the
+source `skills/md2latex/` — which has no install metadata — and prompt for a
+repository. From outside the clone it just updates the installed copy.)
 
 ## Usage
 
