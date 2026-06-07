@@ -38,10 +38,11 @@ for the full mapping.
 ## Install (via `gh skill`)
 
 ```bash
-gh skill install <owner>/md2latex md2latex
+gh skill install yusekiya/md2latex md2latex --agent claude-code --scope user
 ```
 
-(Requires GitHub CLI ≥ 2.90 with the `skill` command.)
+(Requires GitHub CLI ≥ 2.90 with the `skill` command. Drop `--scope user` for
+project-local install, or change `--agent` for other agents.)
 
 ## Usage
 
@@ -82,3 +83,7 @@ CLAUDE.md, .claude/     # developer documentation
   none, the caption is left empty for you to fill in.
 - Templates keep `\author{names}` as a placeholder — fill in author info
   locally; it is intentionally not auto-populated.
+
+## License
+
+[MIT](LICENSE)

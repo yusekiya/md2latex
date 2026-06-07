@@ -2,6 +2,7 @@
 name: md2latex
 description: Convert a Markdown file into a compilable LaTeX document (.tex + latexmkrc). Auto-selects a bundled template (general_jp / general_en / exercise) from the YAML frontmatter and body language, runs a deterministic Python converter for the mechanical grammar, then does a small semantic pass (labels, cross-references, captions). Use when the user asks to turn a Markdown file into LaTeX/TeX, e.g. "/md2latex target.md".
 allowed-tools: Bash, Read, Edit, Write
+license: MIT
 ---
 
 # md2latex
