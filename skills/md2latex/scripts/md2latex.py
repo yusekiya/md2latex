@@ -28,7 +28,6 @@ references, empty captions, subproblem grouping, ...).
 from __future__ import annotations
 
 import argparse
-import os
 import re
 import sys
 from pathlib import Path
@@ -629,7 +628,6 @@ class Renderer:
     def render_subproblems(self, run):
         items = []
         for b in run:
-            text = "\n".join(b["lines"])
             m = SUBPROBLEM_RE.match(b["lines"][0])
             rest_first = m.group(2)
             other = b["lines"][1:]
