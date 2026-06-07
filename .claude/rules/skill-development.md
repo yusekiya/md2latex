@@ -2,14 +2,9 @@
 
 ## Operational guardrails (do not violate)
 
-- **`instruction/` is reference-only and temporary.** Never read the skill's
-  runtime behavior *from* it — copy what is needed into `skills/md2latex/`.
-  **Never delete `instruction/`**; the user removes it. Anything the skill needs
-  at runtime must already be copied out (templates, spec) so the skill survives
-  its deletion.
-- **No publishing without explicit instruction.** Do not push to GitHub, run
-  `gh skill publish`, or otherwise make anything public until the user explicitly
-  asks. (Local `gh skill preview` is fine.)
+- **The repository is public** at <https://github.com/yusekiya/md2latex>.
+  Routine pushes and `gh skill publish` releases are expected maintenance; still
+  pause before irreversible actions (force-push, deleting tags/releases).
 - **No personal data anywhere.** Outputs may be published. Keep `\author{names}`
   a placeholder; never embed real names, emails, IDs, or passwords in code,
   templates, fixtures, docs, or generated `.tex`.
@@ -19,7 +14,7 @@
 - Layout follows the `gh skill` convention: `skills/<name>/SKILL.md` (plus
   `scripts/`, `reference/`, `templates/`). This repo uses `skills/md2latex/`.
 - `SKILL.md` frontmatter requires `name` (lowercase-hyphen, matches the dir) and
-  `description`; `license` is optional and deferred until a license is chosen.
+  `description`; `license` is optional (this skill declares `license: MIT`).
 - Keep the skill **self-contained**: only relative references inside
   `skills/md2latex/`. `scripts/md2latex.py` resolves templates relative to its
   own location (`Path(__file__).parent.parent/"templates"`), so it works from
