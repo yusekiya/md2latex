@@ -19,6 +19,7 @@ Usage:
 Outputs (into --outdir, default = current working directory):
     <basename>.tex      the assembled LaTeX document
     latexmkrc           the compiler config copied from the chosen template
+    config.tex          the preamble settings, when the template ships one
 
 A human-readable "post-edit hints" report is printed to stderr listing the few
 places that still need a human/agent decision (semantic labels, cross
@@ -50,6 +51,37 @@ FALLBACK_JP = "general_jp"
 FALLBACK_EN = "general_en"
 
 VALID_TEMPLATES = {"general_jp", "general_en", "exercise"}
+
+# ---------------------------------------------------------------------------
+# Obsidian callout mapping (> [!type] Title)
+# ---------------------------------------------------------------------------
+
+# Templates whose preamble (config.tex) defines the callout/theorem
+# environments. Other templates degrade callouts to a plain quote.
+CALLOUT_TEMPLATES = {"general_jp", "general_en"}
+
+# Theorem-like callout types -> amsthm environment names; rendered as
+# \begin{callout}[Title]{env} ... \end{callout}. Numbered variants are used;
+# switch to the starred env (thm* etc.) by hand if numbering is unwanted.
+CALLOUT_THEOREM_MAP = {
+    "theorem": "thm",
+    "lemma": "lem",
+    "proposition": "prop",
+    "corollary": "cor",
+    "conjecture": "conj",
+    "assumption": "asm",
+    "definition": "dfn",
+    "remark": "rem",
+    "exercise": "exc",
+    "law": "law",       # title is mandatory (lawbreak style shows only the title)
+}
+
+# Standalone callout-box environments (NewCalloutBoxEnv in config.tex);
+# rendered as \begin{env}[Title] ... \end{env}.
+CALLOUT_BOX_ENVS = {"objective", "summary", "info"}
+
+# Unknown callout types fall back to this box environment (title preserved).
+CALLOUT_FALLBACK_ENV = "info"
 
 
 def select_template(tags, body_text):
@@ -244,6 +276,8 @@ TABLE_SEP_RE = re.compile(r"^\s*\|?\s*:?-{1,}:?\s*(\|\s*:?-{1,}:?\s*)*\|?\s*$")
 # An explicit blank-line marker authors use (e.g. in Obsidian) to force a blank
 # line; rendered as a kept paragraph break, never as literal text.
 SPAN_RE = re.compile(r"^\s*<span\s*>\s*</span\s*>\s*$")
+# First stripped line of an Obsidian callout blockquote: [!type] / [!type]- Title
+CALLOUT_HEAD_RE = re.compile(r"^\[!([A-Za-z][\w-]*)\]([+-]?)\s*(.*)$")
 
 
 def is_blank(line):
@@ -320,7 +354,12 @@ def segment(lines):
             while i < n and BLOCKQUOTE_RE.match(lines[i]):
                 buf.append(BLOCKQUOTE_RE.match(lines[i]).group(1))
                 i += 1
-            push({"type": "blockquote", "lines": buf})
+            m = CALLOUT_HEAD_RE.match(buf[0].strip())
+            if m:
+                push({"type": "callout", "kind": m.group(1).lower(),
+                      "title": m.group(3).strip(), "lines": buf[1:]})
+            else:
+                push({"type": "blockquote", "lines": buf})
         elif "|" in line and i + 1 < n and TABLE_SEP_RE.match(lines[i + 1]):
             tbl, i = _collect_table(lines, i)
             push(tbl)
@@ -567,6 +606,43 @@ class Renderer:
         body = "\n".join(self.inline.convert(ln) for ln in b["lines"] if ln.strip() != "")
         return "\\begin{quote}\n" + body + "\n\\end{quote}"
 
+    def r_callout(self, b):
+        kind = b["kind"]
+        title = self.inline.convert(b["title"]) if b["title"] else None
+        # the callout body is full Markdown -> render it recursively
+        inner = self.render(segment(b["lines"]))
+        opt = "[{" + title + "}]" if title else ""
+
+        if self.template not in CALLOUT_TEMPLATES:
+            # template has no callout environments; degrade to a plain quote
+            self.hints.append(
+                f"callout [!{kind}] degraded to quote (template "
+                f"'{self.template}' has no callout environments)")
+            head = ("\\textbf{" + title + "}\\\\\n") if title else ""
+            return "\\begin{quote}\n" + head + inner + "\n\\end{quote}"
+
+        if kind in CALLOUT_THEOREM_MAP:
+            env = CALLOUT_THEOREM_MAP[kind]
+            if env == "law" and not title:
+                self.hints.append(
+                    "callout [!law] has no title, but the law environment "
+                    "requires one — add a title in \\begin{callout}[{...}]{law}")
+                opt = "[{}]"
+            return ("\\begin{callout}" + opt + "{" + env + "}\n"
+                    + inner + "\n\\end{callout}")
+
+        if kind in CALLOUT_BOX_ENVS:
+            return ("\\begin{" + kind + "}" + opt + "\n"
+                    + inner + "\n\\end{" + kind + "}")
+
+        # unknown type: keep the box (and the author's title) via the fallback env
+        self.hints.append(
+            f"callout [!{kind}] is not mapped; rendered as "
+            f"'{CALLOUT_FALLBACK_ENV}' box — change the environment if a "
+            f"better fit exists (see CALLOUT_THEOREM_MAP / CALLOUT_BOX_ENVS)")
+        return ("\\begin{" + CALLOUT_FALLBACK_ENV + "}" + opt + "\n"
+                + inner + "\n\\end{" + CALLOUT_FALLBACK_ENV + "}")
+
     def r_math(self, b):
         inner = list(b["lines"])
         stripped = [ln for ln in inner if ln.strip() != ""]
@@ -810,20 +886,31 @@ def convert(md_path, outdir, template_override=None):
     tex_out.write_text(tex, encoding="utf-8")
     latexmkrc_out.write_text((template_dir / "latexmkrc").read_text(encoding="utf-8"),
                              encoding="utf-8")
+    written = [tex_out, latexmkrc_out]
+
+    # templates that split their preamble into config.tex (\input{config})
+    # need that file next to the generated .tex
+    config_src = template_dir / "config.tex"
+    if config_src.exists():
+        config_out = outdir / "config.tex"
+        config_out.write_text(config_src.read_text(encoding="utf-8"),
+                              encoding="utf-8")
+        written.append(config_out)
 
     refs = scan_reference_candidates(body_lines)
-    _print_report(template, reason, tex_out, latexmkrc_out, hints, refs)
+    _print_report(template, reason, written, hints, refs)
     return tex_out
 
 
-def _print_report(template, reason, tex_out, latexmkrc_out, hints, refs):
+def _print_report(template, reason, written, hints, refs):
     e = sys.stderr
     print("=" * 70, file=e)
     print("md2latex: conversion complete", file=e)
     print("=" * 70, file=e)
     print(f"template : {template}  ({reason})", file=e)
-    print(f"written  : {tex_out}", file=e)
-    print(f"           {latexmkrc_out}", file=e)
+    print(f"written  : {written[0]}", file=e)
+    for path in written[1:]:
+        print(f"           {path}", file=e)
     print("", file=e)
     print("POST-EDIT HINTS (agent: handle only these, then compile):", file=e)
     if not hints:

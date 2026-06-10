@@ -174,6 +174,61 @@ lists candidates as hints. The agent rewrites them:
   is embedded in a word with no leading label, e.g. `第2節` → `第\ref{sec:…}節`,
   there is no `~` to add.)
 
+## Callouts (Obsidian) → theorem / box environments
+
+A blockquote whose first line is `[!type]` (optionally `[!type]+` / `[!type]-`,
+optionally followed by a title) is an **Obsidian callout**, not a quote/caption.
+The callout body is full Markdown and is converted recursively (math, lists,
+decoration, …).
+
+The `general_jp` / `general_en` templates define the target environments in
+their `config.tex`. Mapping (tables `CALLOUT_THEOREM_MAP` / `CALLOUT_BOX_ENVS`
+at the top of the script):
+
+- **Theorem-like types** → `\begin{callout}[{Title}]{env} … \end{callout}`
+  (the optional `[{Title}]` is omitted when the callout has no title):
+
+  | callout type | env | callout type | env |
+  | :--- | :-- | :--- | :-- |
+  | `[!theorem]` | `thm` | `[!assumption]` | `asm` |
+  | `[!lemma]` | `lem` | `[!definition]` | `dfn` |
+  | `[!proposition]` | `prop` | `[!remark]` | `rem` |
+  | `[!corollary]` | `cor` | `[!exercise]` | `exc` |
+  | `[!conjecture]` | `conj` | `[!law]` | `law` |
+
+  The **numbered** environments are used; switch to the starred variant
+  (`thm*`, …) by hand if numbering is unwanted. `law` requires a title; a
+  title-less `[!law]` is emitted as `[{}]` and flagged as a hint.
+
+- **Box types** → the standalone box environments:
+  `[!objective]` → `objective`, `[!summary]` → `summary`, `[!info]` → `info`
+  (`objective`/`summary` fall back to their default titles when none is given).
+
+- **Unknown types** (e.g. `[!note]`) → an `info` box with the author's title
+  preserved; a hint is emitted so the agent can pick a better environment.
+
+Example:
+
+```
+> [!theorem] コーシー・シュワルツの不等式
+> 任意のベクトルに対して次が成り立つ．
+> $$
+> |\braket{a, b}|^2 \le \braket{a, a} \braket{b, b}
+> $$
+```
+→
+```latex
+\begin{callout}[{コーシー・シュワルツの不等式}]{thm}
+任意のベクトルに対して次が成り立つ．
+\begin{equation}
+|\braket{a, b}|^2 \le \braket{a, a} \braket{b, b}
+\end{equation}
+\end{callout}
+```
+
+The `exercise` template has no callout environments: a callout there degrades
+to a `quote` (title kept as a bold lead line) and a hint is emitted.
+
 ## Footnotes
 
 | Markdown | LaTeX |
@@ -228,3 +283,5 @@ Into the current working directory:
 
 - `<basename>.tex` — the assembled document (template preamble + converted body).
 - `latexmkrc` — copied from the chosen template; compile with `latexmk <basename>.tex`.
+- `config.tex` — the preamble settings (`\input{config}`), when the chosen
+  template ships one (`general_jp` / `general_en`; `exercise` is single-file).

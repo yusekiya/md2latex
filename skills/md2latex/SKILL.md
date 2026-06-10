@@ -28,8 +28,9 @@ Let `SKILL_DIR` be the directory containing this SKILL.md.
    python3 "$SKILL_DIR/scripts/md2latex.py" <target.md>
    ```
 
-   It writes `./<basename>.tex` and `./latexmkrc`, and prints a **POST-EDIT
-   HINTS** report to stderr. It auto-selects the template; override with
+   It writes `./<basename>.tex`, `./latexmkrc` and — for templates that split
+   their preamble — `./config.tex`, and prints a **POST-EDIT HINTS** report to
+   stderr. It auto-selects the template; override with
    `--template general_jp|general_en|exercise` only if the user asks.
 
 2. **Read the hints** from stderr. They tell you exactly which lines still need
@@ -49,6 +50,10 @@ Let `SKILL_DIR` be the directory containing this SKILL.md.
      provides the caption.
    - **Subproblems / lists**: verify the generated `subproblems`/list grouping
      matches the source, especially multi-paragraph items.
+   - **Callouts**: Obsidian callouts (`> [!theorem]` …) are converted
+     automatically; act only on flagged ones (a title-less `[!law]`, an
+     unmapped type rendered as `info`, or a degradation to `quote` in the
+     `exercise` template).
 
 4. **(Recommended) Compile** to confirm it builds, then report the PDF:
 

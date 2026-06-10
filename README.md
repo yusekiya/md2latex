@@ -11,7 +11,8 @@ captions).
 
 ## What it does
 
-Given `target.md`, it produces `target.tex` and a `latexmkrc` in the current
+Given `target.md`, it produces `target.tex` and a `latexmkrc` (plus the
+template's `config.tex` preamble, for `general_jp`/`general_en`) in the current
 directory:
 
 - Auto-selects a template from the YAML frontmatter and body language:
@@ -21,8 +22,10 @@ directory:
 - Converts: H1→title and H2…→`\section`…; `$$…$$`→`equation`/`align`/…;
   `\tag`→`\label`; pipe tables→`table`/`tabular`; Obsidian/Markdown images→
   `figure`; figure/table captions from adjacent `>` blockquotes; footnotes;
-  `**bold**`/`_italic_`/`` `code` ``/links/lists; and (exercise) `**(a)**`
-  subproblems → a `subproblems` environment.
+  `**bold**`/`_italic_`/`` `code` ``/links/lists; Obsidian callouts
+  (`> [!theorem]`, `> [!definition]`, `> [!info]`, …) → the templates'
+  theorem/callout box environments; and (exercise) `**(a)**` subproblems → a
+  `subproblems` environment.
 - Leaves the Markdown source untouched and translates **grammar only** — the
   author's wording is preserved.
 

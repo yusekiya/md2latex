@@ -20,7 +20,7 @@ meant (which label, which reference, what caption), it belongs in the hints.
 ```
 target.md ──▶ parse frontmatter ──▶ select template ──▶ extract H1-down body
           ──▶ segment into blocks ──▶ render blocks (inline conv.) ──▶ assemble
-          ──▶ write <basename>.tex + latexmkrc ──▶ print hints (stderr)
+          ──▶ write <basename>.tex + latexmkrc (+ config.tex) ──▶ print hints (stderr)
                                                         │
                                                         ▼
                                           agent applies targeted Edits ──▶ latexmk
@@ -32,15 +32,21 @@ target.md ──▶ parse frontmatter ──▶ select template ──▶ extrac
 - `parse_frontmatter` — minimal YAML, extracts only `tags`.
 - `select_template` / `is_japanese` — see template-selection rule.
 - `segment` — line-based block segmentation (code, math, heading, figure,
-  blockquote, table, list, paragraph).
+  blockquote, callout, table, list, paragraph). A blockquote whose first line
+  is `[!type]` becomes a `callout` block (so it is never mistaken for a caption).
 - `Renderer` — renders blocks; associates `>` blockquotes with the adjacent
-  figure (below) / table (above) as captions; groups exercise subproblems;
-  numbers `eq/fig/table` labels deterministically.
+  figure (below) / table (above) as captions; converts Obsidian callouts into
+  the template's `callout`/box environments (`CALLOUT_THEOREM_MAP` /
+  `CALLOUT_BOX_ENVS` tables at the top of the script; recursive render of the
+  body; degrades to `quote` on templates without callout envs); groups exercise
+  subproblems; numbers `eq/fig/table` labels deterministically.
 - `Inline` — converts text spans only; protects inline code/math/URLs, converts
   decoration/links/footnotes, escapes a minimal set of specials. **Never** runs
   on math or code content.
 - `assemble` — substitutes `\title`, injects `hyperref` only when links are
-  used, inserts the body after `\maketitle`.
+  used, inserts the body after `\maketitle`. `convert` also copies the
+  template's `config.tex` (the split-out preamble, `\input{config}`) next to
+  the output when the template ships one.
 - Hints — equation tag→label map, figure/table source-number→label map, empty
   captions, reference candidates (regex, line numbers), subproblem ranges.
 

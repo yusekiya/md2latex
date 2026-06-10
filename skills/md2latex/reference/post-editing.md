@@ -12,6 +12,8 @@ document.
   lists, and (exercise) subproblems.
 - Extracted captions from adjacent `>` blockquotes; left `\caption{}` empty
   where there was none.
+- Converted Obsidian callouts (`> [!theorem]` …) into the template's
+  `callout`/box environments (general_jp / general_en).
 - Turned each `\tag{N}` into a placeholder `\label{eq:eqN}`.
 
 ## Your tasks, driven by the hints
@@ -49,7 +51,20 @@ source — especially items whose body spans multiple paragraphs (the script
 groups one paragraph per `\item`; merge follow-on paragraphs into the right
 `\item` if needed).
 
-### 5. Anything else the hints flag
+### 5. Callout hints
+Only act when a callout is flagged:
+- **`[!law]` without a title** — the `law` environment requires one; the script
+  emitted `\begin{callout}[{}]{law}`. Put the proper title between the braces
+  (take it from the surrounding prose only if unambiguous; otherwise ask).
+- **Unmapped type rendered as `info`** — if a mapped environment clearly fits
+  better (e.g. the author used a synonym of *theorem*), switch it; otherwise
+  the `info` box is fine. Never invent title text.
+- **Degraded to `quote` (exercise template)** — expected; mention it in the
+  final summary.
+- Theorem callouts use the **numbered** environments (`thm`, `dfn`, …). If the
+  user asks for unnumbered ones, switch to the starred variants (`thm*`, …).
+
+### 6. Anything else the hints flag
 E.g. an extra H1 in the body (mapped to `\section`), or text that may need extra
 LaTeX escaping. Resolve each, preserving the author's wording.
 

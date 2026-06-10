@@ -20,7 +20,11 @@ TAG_RULES = [
 The README states new selector tags will appear over time, so adding one must be
 a one-line change plus assets:
 
-1. Create `skills/md2latex/templates/<name>/{main.tex, latexmkrc}`.
+1. Create `skills/md2latex/templates/<name>/{main.tex, latexmkrc}`; optionally
+   split the preamble into `config.tex` (`\input{config}` in `main.tex` — the
+   converter copies it next to the output automatically). Templates with a
+   `config.tex` defining the callout/theorem envs should also be added to
+   `CALLOUT_TEMPLATES` in the script so Obsidian callouts map onto them.
 2. Add a row to `TAG_RULES`, e.g. `("lecture/report", "report")`.
 3. Add `<name>` to `VALID_TEMPLATES`.
 4. Add a `tests/sample_<name>.md` fixture and verify it compiles.

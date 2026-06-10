@@ -49,3 +49,6 @@ $$
 ![[nocaption.pdf#page=2|alt only]]
 
 この図にはキャプションが無い．
+
+> [!info] ヒント
+> exerciseテンプレートにはCallout環境が無いので，これは引用にフォールバックする．

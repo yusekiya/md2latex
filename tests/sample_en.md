@@ -35,3 +35,23 @@ See Eq. (1) above. A footnote follows.\footnote{An existing LaTeX footnote.}
 | beta  | 2     |
 
 Percent signs like 50% and ampersands a & b are escaped in prose.
+
+## Theorems and callouts
+
+> [!definition] Inner product
+> For vectors $a, b$ the inner product is
+> $$
+> \braket{a, b} = \sum_i a_i b_i
+> $$
+
+> [!theorem] Cauchy–Schwarz inequality
+> For any vectors, $|\braket{a, b}|^2 \le \braket{a, a}\braket{b, b}$ holds.
+
+> [!remark]
+> An untitled remark with _italic_ text.
+
+> [!summary]
+> A summary box using its default title.
+
+> [!info] Extra information
+> An info box with an explicit title.

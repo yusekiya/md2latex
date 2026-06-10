@@ -17,6 +17,8 @@ skills/md2latex/
 │   ├── conversion-spec.md   # canonical grammar mapping
 │   └── post-editing.md      # the agent's semantic pass
 └── templates/{general_jp,general_en,exercise}/{main.tex,latexmkrc}
+                                                 # general_jp/general_en also ship config.tex
+                                                 # (preamble incl. theorem/callout envs)
 ```
 
 Everything else in the repo (this file, `.claude/`, `tests/`, `README.md`) is
@@ -27,7 +29,7 @@ Everything else in the repo (this file, `.claude/`, `tests/`, `README.md`) is
 To save tokens, a Python script does all *mechanical* Markdown→LaTeX grammar
 conversion and writes a complete `.tex`, while the agent only performs the few
 *semantic* edits the script reports as "post-edit hints" (label naming, prose
-cross-references, caption gaps, subproblem grouping). The Markdown source is
+cross-references, caption gaps, subproblem grouping, flagged callouts). The Markdown source is
 never modified; only grammar is translated, never wording. See
 @.claude/rules/architecture.md.
 
