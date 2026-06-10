@@ -21,8 +21,10 @@
   any working directory and any install location.
 - `gh skill install` writes provenance metadata into `SKILL.md` frontmatter on
   install — do not add it by hand.
-- Validate the package shape locally with `gh skill preview <path>` (does not
-  publish).
+- `gh skill preview` does **not** accept a local path (it only fetches from a
+  GitHub repository, e.g. `gh skill preview yusekiya/md2latex md2latex` for the
+  published version). Validate local changes by converting the `tests/`
+  fixtures and compiling them instead (see the maintenance checklist below).
 
 ## SKILL.md authoring
 
