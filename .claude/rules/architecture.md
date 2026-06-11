@@ -44,7 +44,9 @@ target.md ──▶ parse frontmatter ──▶ select template ──▶ extrac
   decoration/links/footnotes, escapes a minimal set of specials. **Never** runs
   on math or code content.
 - `assemble` — substitutes `\title`, injects `hyperref` only when links are
-  used, inserts the body after `\maketitle`. `convert` also copies the
+  used, inserts the body after `\maketitle`. `convert` copies the template's
+  `latexmkrc` while rewriting its `@default_files` target from `main.tex` to
+  `<basename>.tex` (so a bare `latexmk` builds the output), and also copies the
   template's `config.tex` (the split-out preamble, `\input{config}`) next to
   the output when the template ships one.
 - Hints — equation tag→label map, figure/table source-number→label map, empty

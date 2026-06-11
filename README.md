@@ -13,7 +13,8 @@ captions).
 
 Given `target.md`, it produces `target.tex` and a `latexmkrc` (plus the
 template's `config.tex` preamble, for `general_jp`/`general_en`) in the current
-directory:
+directory. The `latexmkrc`'s default target is set to `target.tex`, so a bare
+`latexmk` (no file argument) builds the document.
 
 - Auto-selects a template from the YAML frontmatter and body language:
   - `exercise` — when `tags:` contains `lecture/exercise`
@@ -67,7 +68,8 @@ In Claude Code:
 ```
 
 The skill runs the converter, applies the semantic post-edits, and (optionally)
-compiles the result:
+compiles the result (the bundled `latexmkrc` selects the engine and targets
+`target.tex`, so a bare `latexmk` works too):
 
 ```bash
 latexmk target.tex

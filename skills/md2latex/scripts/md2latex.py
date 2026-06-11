@@ -18,7 +18,8 @@ Usage:
 
 Outputs (into --outdir, default = current working directory):
     <basename>.tex      the assembled LaTeX document
-    latexmkrc           the compiler config copied from the chosen template
+    latexmkrc           the compiler config from the chosen template, with its
+                        @default_files target rewritten to <basename>.tex
     config.tex          the preamble settings, when the template ships one
 
 A human-readable "post-edit hints" report is printed to stderr listing the few
@@ -884,8 +885,15 @@ def convert(md_path, outdir, template_override=None):
     tex_out = outdir / f"{stem}.tex"
     latexmkrc_out = outdir / "latexmkrc"
     tex_out.write_text(tex, encoding="utf-8")
-    latexmkrc_out.write_text((template_dir / "latexmkrc").read_text(encoding="utf-8"),
-                             encoding="utf-8")
+    # The template latexmkrc names main.tex as its default target; point it at
+    # the actual output stem so a bare `latexmk` (no file argument) builds it.
+    latexmkrc = (template_dir / "latexmkrc").read_text(encoding="utf-8")
+    latexmkrc = re.sub(
+        r"(@default_files\s*=\s*\(\s*')main\.tex('\s*\)\s*;)",
+        rf"\g<1>{stem}.tex\g<2>",
+        latexmkrc,
+    )
+    latexmkrc_out.write_text(latexmkrc, encoding="utf-8")
     written = [tex_out, latexmkrc_out]
 
     # templates that split their preamble into config.tex (\input{config})

@@ -282,6 +282,8 @@ Within the `exercise` template, consecutive `**(x)**`-led paragraphs become a
 Into the current working directory:
 
 - `<basename>.tex` — the assembled document (template preamble + converted body).
-- `latexmkrc` — copied from the chosen template; compile with `latexmk <basename>.tex`.
+- `latexmkrc` — from the chosen template, with its `@default_files` target
+  rewritten from `main.tex` to `<basename>.tex`, so a bare `latexmk` (or
+  `latexmk <basename>.tex`) builds the document.
 - `config.tex` — the preamble settings (`\input{config}`), when the chosen
   template ships one (`general_jp` / `general_en`; `exercise` is single-file).
