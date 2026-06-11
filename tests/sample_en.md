@@ -50,6 +50,10 @@ Percent signs like 50% and ampersands a & b are escaped in prose.
 > [!remark]
 > An untitled remark with _italic_ text.
 
+> [!corollary] List-first body
+> - the body starts directly with a list
+> - the head must still end its own line
+
 > [!summary]
 > A summary box using its default title.
 
