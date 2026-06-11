@@ -67,9 +67,11 @@ In Claude Code:
 /md2latex target.md
 ```
 
-The skill runs the converter, applies the semantic post-edits, and (optionally)
-compiles the result (the bundled `latexmkrc` selects the engine and targets
-`target.tex`, so a bare `latexmk` works too):
+The skill runs the converter — which writes `target.tex`, `latexmkrc`, and (for
+the `general_jp`/`general_en` templates) the `config.tex` preamble — applies the
+semantic post-edits, and (optionally) compiles the result (the bundled
+`latexmkrc` selects the engine and targets `target.tex`, so a bare `latexmk`
+works too):
 
 ```bash
 latexmk target.tex
