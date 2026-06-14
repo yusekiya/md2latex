@@ -3,8 +3,9 @@
 ## Operational guardrails (do not violate)
 
 - **The repository is public** at <https://github.com/yusekiya/md2latex>.
-  Routine pushes and `gh skill publish` releases are expected maintenance; still
-  pause before irreversible actions (force-push, deleting tags/releases).
+  Routine pushes and GitHub Releases (see *Release / version bump* below) are
+  expected maintenance; still pause before irreversible actions (force-push,
+  deleting tags/releases).
 - **No personal data anywhere.** Outputs may be published. Keep `\author{names}`
   a placeholder; never embed real names, emails, IDs, or passwords in code,
   templates, fixtures, docs, or generated `.tex`.
@@ -41,3 +42,32 @@
 3. Compile each with `latexmk` (Lua/pdf as per template) — confirm no errors and
    no undefined references after the semantic pass.
 4. Keep `general_jp`/`exercise` on LuaLaTeX and `general_en` on pdfLaTeX.
+
+## Release / version bump (publishing a new skill version)
+
+`gh skill install` / `gh skill update` resolve the latest **GitHub Release**, not
+the latest git tag — a tag alone is invisible to installers. A version bump is
+"published" only once a Release exists. Use semver `vX.Y.Z` tags (feature add →
+minor, e.g. `v1.3.0` → `v1.4.0`; bugfix → patch).
+
+Steps, once the maintenance checklist above passes:
+
+1. Commit to `main` and push — **Claude may do both** (routine maintenance).
+2. Annotated tag + push it — **Claude may do both**:
+   `git tag -a vX.Y.Z -m "…"` then `git push origin vX.Y.Z`.
+3. Create the Release from that tag:
+   `gh release create vX.Y.Z --title vX.Y.Z --notes-file <notes.md>`.
+   **`gh release:*` is in the user's `deny` list (`~/.claude/settings.json`), so
+   Claude cannot run this and must not try to edit settings to bypass it.** Claude
+   prepares the notes file and hands the user the exact command to run themselves
+   (e.g. `! gh release create …`).
+4. Refresh installed copies: `gh skill update --all` (run from `$HOME`, **not**
+   inside this repo). The skill is installed at **user scope for more than one
+   agent** (`~/.claude/skills/md2latex` for Claude Code, `~/.copilot/skills/md2latex`
+   for GitHub Copilot); a home-dir update refreshes all of them, so seeing two
+   `✓ Updated md2latex` lines is expected, not a duplicate bug. Verify with
+   `grep github-ref <install>/SKILL.md` → `refs/tags/vX.Y.Z`.
+
+Gotcha: running `gh skill list`/`update` *inside* this repo also surfaces the
+source tree as a `project`-scope `n/a (published)` entry with no metadata — ignore
+it; only the `$HOME`-scope copies are real installs to update.
