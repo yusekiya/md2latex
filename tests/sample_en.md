@@ -59,3 +59,17 @@ Percent signs like 50% and ampersands a & b are escaped in prose.
 
 > [!info] Extra information
 > An info box with an explicit title.
+
+## Exercises and solutions
+
+> [!exercise]
+> Compute $1 + 1$.
+>
+> > [!solution]
+> > It is $2$.
+
+> [!exercise]
+> Solve $x^2 = 4$.
+>
+> > [!solution] Sketch
+> > $x = \pm 2$.

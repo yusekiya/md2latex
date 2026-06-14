@@ -81,6 +81,17 @@ CALLOUT_THEOREM_MAP = {
 # rendered as \begin{env}[Title] ... \end{env}.
 CALLOUT_BOX_ENVS = {"objective", "summary", "info"}
 
+# Non-boxed run-in environments defined directly in config.tex (NOT wrapped in a
+# callout tcolorbox). Rendered as \begin{env}[Title] ... \end{env}; the Obsidian
+# callout title maps to the environment's heading-override argument, e.g.
+#   > [!solution] 略解   ->   \begin{sol}[略解] ... \end{sol}
+# Typically nested inside an [!exercise] callout (the sol env is meant for use
+# inside exc, but works outside it too).
+CALLOUT_PLAIN_ENVS = {
+    "solution": "sol",
+    "sol": "sol",
+}
+
 # Unknown callout types fall back to this box environment (title preserved).
 CALLOUT_FALLBACK_ENV = "info"
 
@@ -631,6 +642,12 @@ class Renderer:
                 opt = "[{}]"
             return ("\\begin{callout}" + opt + "{" + env + "}\n"
                     + inner + "\n\\end{callout}")
+
+        if kind in CALLOUT_PLAIN_ENVS:
+            # non-boxed run-in env (e.g. sol); title -> heading-override argument
+            env = CALLOUT_PLAIN_ENVS[kind]
+            return ("\\begin{" + env + "}" + opt + "\n"
+                    + inner + "\n\\end{" + env + "}")
 
         if kind in CALLOUT_BOX_ENVS:
             return ("\\begin{" + kind + "}" + opt + "\n"

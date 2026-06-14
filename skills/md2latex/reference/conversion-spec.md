@@ -182,8 +182,8 @@ The callout body is full Markdown and is converted recursively (math, lists,
 decoration, …).
 
 The `general_jp` / `general_en` templates define the target environments in
-their `config.tex`. Mapping (tables `CALLOUT_THEOREM_MAP` / `CALLOUT_BOX_ENVS`
-at the top of the script):
+their `config.tex`. Mapping (tables `CALLOUT_THEOREM_MAP` / `CALLOUT_BOX_ENVS` /
+`CALLOUT_PLAIN_ENVS` at the top of the script):
 
 - **Theorem-like types** → `\begin{callout}[{Title}]{env} … \end{callout}`
   (the optional `[{Title}]` is omitted when the callout has no title):
@@ -203,6 +203,12 @@ at the top of the script):
 - **Box types** → the standalone box environments:
   `[!objective]` → `objective`, `[!summary]` → `summary`, `[!info]` → `info`
   (`objective`/`summary` fall back to their default titles when none is given).
+
+- **Run-in solution** → `[!solution]` (alias `[!sol]`) → `\begin{sol} …
+  \end{sol}`, a non-boxed run-in environment (bold head “解” / “Solution.”, no
+  number, no box). The callout **title maps to the heading override**, so
+  `> [!solution] 略解` → `\begin{sol}[略解] … \end{sol}`. The `sol` environment
+  is meant to sit inside an `[!exercise]` callout (nested) but works anywhere.
 
 - **Unknown types** (e.g. `[!note]`) → an `info` box with the author's title
   preserved; a hint is emitted so the agent can pick a better environment.
@@ -226,8 +232,28 @@ Example:
 \end{callout}
 ```
 
+A solution nested inside an exercise (callouts convert recursively):
+
+```
+> [!exercise]
+> $1+1$ を計算せよ．
+> > [!solution]
+> > $2$ である．
+```
+→
+```latex
+\begin{callout}{exc}
+$1+1$ を計算せよ．
+\begin{sol}
+$2$ である．
+\end{sol}
+\end{callout}
+```
+
 The `exercise` template has no callout environments: a callout there degrades
-to a `quote` (title kept as a bold lead line) and a hint is emitted.
+to a `quote` (title kept as a bold lead line) and a hint is emitted. (Both
+`exc` and `sol` live in `general_jp` / `general_en`'s `config.tex`, so a
+`[!solution]` in the `exercise` template likewise degrades to a `quote`.)
 
 ## Footnotes
 

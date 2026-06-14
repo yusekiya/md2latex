@@ -37,7 +37,8 @@ target.md ──▶ parse frontmatter ──▶ select template ──▶ extrac
 - `Renderer` — renders blocks; associates `>` blockquotes with the adjacent
   figure (below) / table (above) as captions; converts Obsidian callouts into
   the template's `callout`/box environments (`CALLOUT_THEOREM_MAP` /
-  `CALLOUT_BOX_ENVS` tables at the top of the script; recursive render of the
+  `CALLOUT_BOX_ENVS` / `CALLOUT_PLAIN_ENVS` tables at the top of the script; the
+  last is for non-boxed run-in envs like `sol`; recursive render of the
   body; degrades to `quote` on templates without callout envs); groups exercise
   subproblems; numbers `eq/fig/table` labels deterministically.
 - `Inline` — converts text spans only; protects inline code/math/URLs, converts
