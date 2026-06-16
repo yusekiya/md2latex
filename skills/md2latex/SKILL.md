@@ -48,8 +48,9 @@ Let `SKILL_DIR` be the directory containing this SKILL.md.
    - **Empty captions**: figures/tables with no adjacent `>` caption block get
      `\caption{}`. Leave them empty (do not invent text) unless the user
      provides the caption.
-   - **Subproblems / lists**: verify the generated `subproblems`/list grouping
-     matches the source, especially multi-paragraph items.
+   - **Subproblems / lists**: the script folds each subproblem's full body
+     (math, continuation prose, nested lists, figures) into its `\item`; just
+     confirm the `(a)/(b)/...` order matches the source.
    - **Callouts**: Obsidian callouts (`> [!theorem]` …) are converted
      automatically; act only on flagged ones (a title-less `[!law]`, an
      unmapped type rendered as `info`, or a degradation to `quote` in the

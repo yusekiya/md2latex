@@ -47,9 +47,11 @@ final summary so the user can fill them in.
 
 ### 4. Subproblems & lists
 Verify the generated `subproblems`/`itemize`/`enumerate` grouping matches the
-source — especially items whose body spans multiple paragraphs (the script
-groups one paragraph per `\item`; merge follow-on paragraphs into the right
-`\item` if needed).
+source. The script now builds one `subproblems` per `**(x)**` group (first marker
+→ next heading/EOF) and folds each item's full body — display math, continuation
+paragraphs, nested lists, figures — into its `\item`, so multi-block items stay
+together automatically. Just confirm the `(a)/(b)/...` order matches the source;
+only intervene if a stray block landed in the wrong `\item`.
 
 ### 5. Callout hints
 Only act when a callout is flagged:

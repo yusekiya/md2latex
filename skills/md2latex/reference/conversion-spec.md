@@ -281,16 +281,27 @@ broken); other special characters needing escaping are surfaced via hints.
 
 ## exercise template: subproblems
 
-Within the `exercise` template, consecutive `**(x)**`-led paragraphs become a
-`subproblems` list:
+Within the `exercise` template, a `**(x)**` marker starts a `subproblems` list.
+The group runs from the first marker to the **next heading (section) or EOF**;
+every block in between belongs to a subproblem, not just the marker paragraph.
+Each `\item` is the marker's own text **plus all following blocks up to the next
+marker** — display math, continuation paragraphs, nested lists, figures, tables.
+A line-leading `**(x)**` always starts a new block, so markers need no
+surrounding blank line.
 
 ```
 ## 問題タイトル
 問題文．
 
-**(a)** 小問
-
-**(b)** 小問
+**(a)** 同次方程式
+$$
+\ddot{x}+\frac{c}{m}\dot{x}=0
+$$
+の一般解を示せ．
+**(b)** 値を設定し
+1. ケース1
+2. ケース2
+についてグラフを描け．
 ```
 →
 ```latex
@@ -298,10 +309,23 @@ Within the `exercise` template, consecutive `**(x)**`-led paragraphs become a
 問題文．
 
 \begin{subproblems}
-\item 小問
-\item 小問
+\item 同次方程式
+\begin{equation}
+\ddot{x}+\frac{c}{m}\dot{x}=0
+\end{equation}
+の一般解を示せ．
+\item 値を設定し
+\begin{enumerate}
+  \item ケース1
+  \item ケース2
+\end{enumerate}
+についてグラフを描け．
 \end{subproblems}
 ```
+
+The intra-item spacing follows the same `_gap_sep` rule as top-level blocks
+(display math stays tight against its surrounding prose). Section-intro prose or
+figures that appear **before** the first marker stay outside the environment.
 
 ## Output
 

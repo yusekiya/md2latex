@@ -305,6 +305,11 @@ def is_block_start(line):
         or BLOCKQUOTE_RE.match(line)
         or LISTITEM_RE.match(line)
         or SPAN_RE.match(line)
+        # A line-leading '**(x)**' subproblem marker is its own logical unit, so
+        # it must start a fresh block even without a surrounding blank line —
+        # otherwise a continuation paragraph would swallow the next marker(s),
+        # leaving them as literal '\textbf{(b)}' text instead of new \item's.
+        or SUBPROBLEM_RE.match(line)
     )
 
 
@@ -572,9 +577,13 @@ class Renderer:
             b = blocks[i]
             if (self.template == "exercise" and b["type"] == "para"
                     and SUBPROBLEM_RE.match(b["lines"][0])):
+                # A subproblem group runs from the first '**(x)**' marker to the
+                # next heading (= section) or EOF. Collect every block in between
+                # regardless of type so each marker's body — display math,
+                # continuation paragraphs, nested lists, figures/tables — stays
+                # inside the environment; render_subproblems re-splits per marker.
                 run = []
-                while (i < len(blocks) and blocks[i]["type"] == "para"
-                       and SUBPROBLEM_RE.match(blocks[i]["lines"][0])):
+                while i < len(blocks) and blocks[i]["type"] != "heading":
                     run.append(blocks[i])
                     i += 1
                 units.append((self.render_subproblems(run), run[0], run[-1]["type"]))
@@ -761,17 +770,33 @@ class Renderer:
         return render_list(b["lines"], self.inline)
 
     def render_subproblems(self, run):
-        items = []
+        # Split the run into per-item block groups at each '**(x)**' marker. The
+        # caller guarantees run[0] is a marker, so no blocks precede the first
+        # group; everything between two markers (or after the last one, up to the
+        # group boundary) is the body of the preceding item.
+        groups = []  # each is [marker_para, *body_blocks]
         for b in run:
-            m = SUBPROBLEM_RE.match(b["lines"][0])
+            if b["type"] == "para" and SUBPROBLEM_RE.match(b["lines"][0]):
+                groups.append([b])
+            elif groups:
+                groups[-1].append(b)
+
+        items = []
+        for g in groups:
+            marker = g[0]
+            m = SUBPROBLEM_RE.match(marker["lines"][0])
             rest_first = m.group(2)
-            other = b["lines"][1:]
-            content_lines = ([rest_first] + other) if rest_first or other else [rest_first]
-            content = "\n".join(self.inline.convert(ln) for ln in content_lines)
-            items.append("\\item " + content)
+            other = marker["lines"][1:]
+            head_lines = ([rest_first] + other) if rest_first or other else [rest_first]
+            body = "\n".join(self.inline.convert(ln) for ln in head_lines)
+            prev_trail = "para"
+            for bb in g[1:]:
+                body += _gap_sep(prev_trail, bb) + self.render_block(bb)
+                prev_trail = bb["type"]
+            items.append("\\item " + body)
         self.hints.append(
-            f"subproblems environment generated from {len(run)} '**(x)**' "
-            f"item(s); verify grouping and that multi-paragraph bodies stayed together")
+            f"subproblems environment generated from {len(groups)} '**(x)**' "
+            f"item(s); confirm the (a)/(b)/... order matches the source")
         return "\\begin{subproblems}\n" + "\n".join(items) + "\n\\end{subproblems}"
 
 
