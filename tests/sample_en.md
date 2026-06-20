@@ -73,3 +73,9 @@ Percent signs like 50% and ampersands a & b are escaped in prose.
 >
 > > [!solution] Sketch
 > > $x = \pm 2$.
+
+> [!exercise-b] Triangle inequality
+> Show that $|a + b| \le |a| + |b|$ for all real $a, b$.
+>
+> > [!solution]
+> > Square both sides and compare.

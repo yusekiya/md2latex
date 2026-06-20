@@ -194,11 +194,18 @@ their `config.tex`. Mapping (tables `CALLOUT_THEOREM_MAP` / `CALLOUT_BOX_ENVS` /
   | `[!lemma]` | `lem` | `[!definition]` | `dfn` |
   | `[!proposition]` | `prop` | `[!remark]` | `rem` |
   | `[!corollary]` | `cor` | `[!exercise]` | `exc` |
-  | `[!conjecture]` | `conj` | `[!law]` | `law` |
+  | `[!conjecture]` | `conj` | `[!exercise-b]` | `excb` |
+  | `[!law]` | `law` | | |
 
   The **numbered** environments are used; switch to the starred variant
   (`thm*`, …) by hand if numbering is unwanted. `law` requires a title; a
   title-less `[!law]` is emitted as `[{}]` and flagged as a hint.
+
+  `[!exercise]` (`exc`) is **run-in** and **ignores its title** — the heading is
+  just “練習問題 N.M” / “Exercise N.M” followed by the body on the same line.
+  `[!exercise-b]` (`excb`) is the **line-break** variant: it shows the optional
+  title (“練習問題 N.M: Title”) and breaks before the body, like `thm`. Both
+  share the same counter, so mixing them keeps one consecutive numbering.
 
 - **Box types** → the standalone box environments:
   `[!objective]` → `objective`, `[!summary]` → `summary`, `[!info]` → `info`

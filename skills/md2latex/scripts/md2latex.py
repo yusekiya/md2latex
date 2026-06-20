@@ -73,7 +73,8 @@ CALLOUT_THEOREM_MAP = {
     "assumption": "asm",
     "definition": "dfn",
     "remark": "rem",
-    "exercise": "exc",
+    "exercise": "exc",       # run-in style; the callout title is NOT shown (exc ignores it)
+    "exercise-b": "excb",    # line-break style; shows the optional title (shares exc's counter)
     "law": "law",       # title is mandatory (lawbreak style shows only the title)
 }
 

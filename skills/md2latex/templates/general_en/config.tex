@@ -317,6 +317,12 @@
 % exc uses definitioninline (head "Exercise N.M." + space, body runs in)
 \theoremstyle{definitioninline}
 \NewCalloutThmEnv{exc}{\excname}{nordgreen}[section]
+% --- excb: line-break version of exc (same definitionbreak style as thm). the head
+%     "Exercise N.M" is set in bold, an optional title is appended as ": title", then
+%     a line break precedes the body. the title is optional (not required).
+%     the counter is shared with exc ([exc]), so mixing exc/excb stays consecutive ---
+\theoremstyle{definitionbreak}
+\NewCalloutThmEnv{excb}[exc]{\excname}{nordgreen}
 % --- solution environment (proof-type, unnumbered, run-in, bold head "Solution.") ---
 %     usable inside or outside an exercise; unlike proof, no QED symbol is added.
 %     the head can be overridden per instance (e.g. \begin{sol}[Sketch] -> "Sketch."),
