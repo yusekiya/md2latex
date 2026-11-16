@@ -38,9 +38,12 @@ never modified; only grammar is translated, never wording. See
 ```bash
 python3 skills/md2latex/scripts/md2latex.py tests/sample_exercise.md --outdir /tmp/out
 latexmk /tmp/out/sample_exercise.tex      # LuaLaTeX for jp/exercise, pdfLaTeX for en
+python3 skills/md2latex/scripts/md2latex.py tests/sample_paper --outdir /tmp/paper
 ```
 
-Fixtures in `tests/` cover all three templates and every conversion construct.
+Fixtures in `tests/` cover all three templates and every conversion construct;
+`tests/sample_paper/` is the directory-input fixture (abstract file, natural
+ordering, citations via reference notes in `refs/`, figure copying).
 
 ## Rules (imported)
 

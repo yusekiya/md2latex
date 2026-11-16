@@ -38,7 +38,8 @@
 ## Maintenance checklist (per change)
 
 1. Update `scripts/md2latex.py` **and** `reference/conversion-spec.md` together.
-2. Update/extend `tests/sample_*.md` and re-run all three through the converter.
+2. Update/extend `tests/sample_*.md` (and the `tests/sample_paper/` directory
+   fixture) and re-run all of them through the converter.
 3. Compile each with `latexmk` (Lua/pdf as per template) — confirm no errors and
    no undefined references after the semantic pass.
 4. Keep `general_jp`/`exercise` on LuaLaTeX and `general_en` on pdfLaTeX.

@@ -17,6 +17,32 @@ General principles:
   Anything above the first H1 (including the YAML frontmatter) is dropped.
 - The H1 text becomes the document title (`\title{...}`).
 
+## Directory input (multiple files)
+
+When the input is a directory, every `*.md` **directly** inside it (not in
+subdirectories; dot-files skipped) is merged into one `<dirname>.tex`:
+
+- **Order**: natural filename order — digit runs compare numerically, so
+  `1_intro.md`, `2_method.md`, `10_conclusion.md` (not `10_` before `2_`).
+- **Headings shift down one level**: each file's H1 → `\section`, H2 →
+  `\subsection`, H3 → `\subsubsection`, … (capped at `\subparagraph`). A file
+  with no H1 is included without a section heading (hint).
+- **Abstract file**: the file whose name, after an optional leading number and
+  separators, is `abstract` (case-insensitive; e.g. `00_abstract.md`,
+  `abstract.md`) — or the one given with `--abstract FILE`. Its body becomes
+  `\begin{abstract} … \end{abstract}` right after `\maketitle`, and **its H1
+  becomes the document title**. More than one candidate is an error.
+- **No abstract file** → `\title{title}` stays as the template placeholder and
+  a hint asks for the title (never invented).
+- **Template selection** uses the union of all files' frontmatter tags and the
+  merged body text.
+- Equation/figure/table numbering is global across files. A `\tag{N}` that
+  repeats (each file restarting at 1) gets a suffixed label: `eq:eq1`,
+  `eq:eq1_2`, …. Hints and reference candidates are prefixed with the source
+  file name (`[2_method.md]`, `2_method.md:15`).
+- Reference notes (see *Citations*) that sit in the same directory are
+  **not** merged as chapters.
+
 ## Template selection
 
 Selection is data-driven and extensible (`TAG_RULES` table in the script):
@@ -157,6 +183,61 @@ a `figure`. A blockquote **immediately below** the image is its caption.
 
 **Captions are optional.** When there is no adjacent blockquote, the caption is
 left empty: `\caption{}` (never invent caption text).
+
+### Figure files are copied
+
+Each referenced image file is **copied next to the generated `.tex`** (the
+output directory) and `\includegraphics` points at the copy, so the LaTeX
+source directory is self-contained. `--figdir DIR` (relative to the output
+directory) puts the copies in a subdirectory instead, e.g. `--figdir figs` →
+`\includegraphics{figs/plot.png}`.
+
+- Lookup: a Markdown image path `![](a/b.png)` is relative to the note
+  (URL-encoded `%20` decoded); an Obsidian embed `![[b.png]]` is tried next to
+  the note, then anywhere in the vault by file name (see *Vault*).
+- Whitespace and `# % & { } ~ $ ^ \` in the file name are replaced with `_`
+  (`Pasted image 1.png` → `Pasted_image_1.png`); two different files with the
+  same name get `_2`, `_3`, …; each change is reported as a hint.
+- The same source file referenced twice is copied once.
+- A file that cannot be found (or a remote URL) keeps its original path and is
+  reported; nothing is fabricated.
+
+## Citations (Obsidian wikilinks → BibTeX)
+
+A wikilink `[[Note]]` (also `[[Note|alias]]`, `[[Note#heading]]`,
+`[[dir/Note]]`) whose target note contains a fenced code block with language
+`bibtex` or `bib` is a **citation**:
+
+````
+Prior work [[Smith2020]], [[山田2021|山田ら]] showed …
+````
+→
+```latex
+Prior work \cite{smith2020,yamada2021} showed …
+```
+
+- The cite key is the key of the **first** `@type{key, …}` record in the note
+  (a note with several records → first one, plus a hint).
+- Citations separated only by whitespace and/or one comma (`,` `，` `、`) are
+  merged into a single `\cite{a,b}`.
+- Every cited record is written to `<basename>.bib` **once** (deduplicated by
+  key, case-insensitive). If the `.bib` already exists its content is kept
+  verbatim and only keys not yet present are appended (an existing key is not
+  overwritten, even if the note's record changed). The same key with different
+  content in two notes → first one kept, hint.
+- When anything is cited, `\bibliographystyle{unsrt}` and
+  `\bibliography{<basename>}` are added before `\end{document}` (`BIB_STYLE`
+  in the script; the bundled `latexmkrc` already runs BibTeX).
+- Any other wikilink (note not found, or no BibTeX block) is left as literal
+  text and reported as a hint.
+
+### Vault
+
+Wikilinks and Obsidian embeds are resolved like Obsidian does: relative to the
+linking note first, then anywhere under the vault root by file name
+(case-insensitive; a `dir/name` link must match as a path suffix; the shallowest
+match wins). The vault root is the nearest ancestor of the input holding an
+`.obsidian/` folder, else the input's directory; `--vault DIR` overrides it.
 
 ## Cross-references
 
@@ -336,9 +417,13 @@ figures that appear **before** the first marker stay outside the environment.
 
 ## Output
 
-Into the current working directory:
+Into the current working directory (`--outdir` to change):
 
-- `<basename>.tex` — the assembled document (template preamble + converted body).
+- `<basename>.tex` — the assembled document (template preamble + converted
+  body). `<basename>` is the file stem, or the directory name for a directory
+  input.
+- `<basename>.bib` — cited BibTeX records (only when something is cited).
+- Copies of the figure files (next to the `.tex`, or under `--figdir`).
 - `latexmkrc` — from the chosen template, with its `@default_files` target
   rewritten from `main.tex` to `<basename>.tex`, so a bare `latexmk` (or
   `latexmk <basename>.tex`) builds the document.

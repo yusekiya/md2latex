@@ -66,7 +66,25 @@ Only act when a callout is flagged:
 - Theorem callouts use the **numbered** environments (`thm`, `dfn`, …). If the
   user asks for unnumbered ones, switch to the starred variants (`thm*`, …).
 
-### 6. Anything else the hints flag
+### 6. Directory input, citations, figures
+- **File-prefixed hints** (`[2_method.md] …`, `2_method.md:15: 式(1)`): each
+  file usually restarts its own numbering, so resolve a reference against the
+  labels emitted **for the same file** (e.g. `式(1)` in `2_method.md` →
+  `eq:eq1_2` if that is the label the hints list for `[2_method.md]`).
+- **Title placeholder** (no abstract file): ask the user for the title; do not
+  derive one from the directory name or a section heading.
+- **Unresolved wikilink** (`[[X]]` left as literal text): either the note is
+  missing or it has no ```` ```bibtex ```` block. If it was meant as a citation,
+  tell the user which note needs a BibTeX block (never write the record
+  yourself); if it is an ordinary link, replace it with its display text
+  (alias, else note name) — that is the grammar-only translation.
+- **Bibliography**: keys already present in an existing `.bib` are kept as-is;
+  if the user changed a record in the note, tell them to delete the stale entry
+  from the `.bib` and re-run.
+- **Figures**: copied next to the `.tex` by default (or `--figdir`). A figure
+  "not found" keeps its original path — report it so the user can supply it.
+
+### 7. Anything else the hints flag
 E.g. an extra H1 in the body (mapped to `\section`), or text that may need extra
 LaTeX escaping. Resolve each, preserving the author's wording.
 

@@ -14,13 +14,24 @@ Design notes:
     and are selected from the YAML frontmatter + body language.
 
 Usage:
-    python3 md2latex.py target.md [--outdir DIR] [--template NAME]
+    python3 md2latex.py target.md  [--outdir DIR] [--template NAME]
+                                   [--vault DIR] [--figdir DIR]
+    python3 md2latex.py target_dir [--abstract FILE] [same options]
+
+A directory input merges every ``*.md`` directly inside it (natural filename
+order, e.g. 2_x before 10_x) into one document; each file's H1 becomes a
+\\section (headings shift down one level). A file named ``abstract`` (after an
+optional leading number, e.g. ``00_abstract.md``) becomes the abstract and its
+H1 the document title.
 
 Outputs (into --outdir, default = current working directory):
-    <basename>.tex      the assembled LaTeX document
+    <basename>.tex      the assembled LaTeX document (<dirname>.tex for a dir)
     latexmkrc           the compiler config from the chosen template, with its
                         @default_files target rewritten to <basename>.tex
     config.tex          the preamble settings, when the template ships one
+    <basename>.bib      BibTeX records of cited notes ([[note]] whose note has a
+                        ```bibtex block); merged into an existing file
+    figure files        copied next to the .tex (or into --figdir)
 
 A human-readable "post-edit hints" report is printed to stderr listing the few
 places that still need a human/agent decision (semantic labels, cross
@@ -30,9 +41,12 @@ references, empty captions, subproblem grouping, ...).
 from __future__ import annotations
 
 import argparse
+import os
 import re
+import shutil
 import sys
 from pathlib import Path
+from urllib.parse import unquote
 
 
 # ---------------------------------------------------------------------------
@@ -96,6 +110,24 @@ CALLOUT_PLAIN_ENVS = {
 # Unknown callout types fall back to this box environment (title preserved).
 CALLOUT_FALLBACK_ENV = "info"
 
+# ---------------------------------------------------------------------------
+# Multi-file input, bibliography, figures
+# ---------------------------------------------------------------------------
+
+# In a directory input, a file whose name (minus a leading number/separators)
+# equals one of these (case-insensitive) is the abstract: its body becomes the
+# abstract environment and its H1 the document title.
+ABSTRACT_STEMS = {"abstract"}
+
+# Fenced code-block languages that hold BibTeX records in a cited note.
+BIBTEX_FENCE_LANGS = {"bibtex", "bib"}
+
+# \bibliographystyle used when the document cites anything.
+BIB_STYLE = "unsrt"
+
+# Directories never indexed when resolving Obsidian links inside the vault.
+VAULT_SKIP_DIRS = {".obsidian", ".git", ".trash", "node_modules"}
+
 
 def select_template(tags, body_text):
     """Return (template_name, reason)."""
@@ -121,7 +153,7 @@ def is_japanese(text):
 # ---------------------------------------------------------------------------
 
 def parse_frontmatter(text):
-    """Return (tags_list, body_text_without_frontmatter).
+    """Return (tags_list, body_text_without_frontmatter, n_frontmatter_lines).
 
     Supports a leading YAML block delimited by '---' lines, extracting only the
     ``tags`` field in either block form::
@@ -135,7 +167,7 @@ def parse_frontmatter(text):
     """
     lines = text.splitlines()
     if not lines or lines[0].strip() != "---":
-        return [], text
+        return [], text, 0
     # find closing '---'
     end = None
     for i in range(1, len(lines)):
@@ -143,12 +175,12 @@ def parse_frontmatter(text):
             end = i
             break
     if end is None:
-        return [], text  # malformed; treat whole thing as body
+        return [], text, 0  # malformed; treat whole thing as body
 
     fm = lines[1:end]
     body = "\n".join(lines[end + 1:])
     tags = _extract_tags(fm)
-    return tags, body
+    return tags, body, end + 1
 
 
 def _extract_tags(fm_lines):
@@ -181,16 +213,38 @@ def _extract_tags(fm_lines):
 # Inline conversion (text spans only; never math/code blocks)
 # ---------------------------------------------------------------------------
 
+# Obsidian wikilink [[Note]] / [[Note|alias]] / [[Note#heading]] (not an embed)
+WIKILINK_RE = re.compile(r"(?<!!)\[\[([^\[\]\n]+?)\]\]")
+# A resolved citation is first marked \x01key\x01 so that adjacent ones (only
+# whitespace / a comma between them) can be merged into a single \cite{a,b}.
+CITE_MARK_RE = re.compile(r"\x01([^\x01]+)\x01")
+CITE_GROUP_RE = re.compile(r"\x01[^\x01]+\x01(?:[ \t]*[,，、]?[ \t]*\x01[^\x01]+\x01)*")
+
+
 class Inline:
     """Converts a single Markdown text fragment to LaTeX.
 
     Protects inline code, inline math and link URLs from escaping, converts
-    decoration/links/footnotes, then escapes the remaining literal specials.
+    citations/decoration/links/footnotes, then escapes the remaining literal
+    specials.
+
+    ``cite`` is an optional callback ``(link_text) -> bibkey | None`` used for
+    Obsidian wikilinks; a link it resolves becomes ``\\cite{key}``, any other
+    wikilink is left as literal text.
     """
 
-    def __init__(self):
+    def __init__(self, cite=None):
         self._store = {}
         self._n = 0
+        self.cite = cite
+
+    def _wikilink(self, m):
+        key = self.cite(m.group(1)) if self.cite else None
+        return "\x01" + key + "\x01" if key else m.group(0)
+
+    def _cite_group(self, m):
+        keys = CITE_MARK_RE.findall(m.group(0))
+        return self._ph("\\cite{" + ",".join(keys) + "}")
 
     def _ph(self, value):
         key = f"\x00{self._n}\x00"
@@ -209,6 +263,11 @@ class Inline:
         # 2. protect inline math $...$ (kept verbatim)
         s = re.sub(r"(?<!\$)\$(?!\$)((?:\\\$|[^$])+?)\$(?!\$)",
                    lambda m: self._ph("$" + m.group(1) + "$"), s)
+        # 2b. Obsidian wikilinks to notes holding a BibTeX record -> \cite{key};
+        #     adjacent citations merge into one \cite{a,b}
+        if self.cite is not None and "[[" in s:
+            s = WIKILINK_RE.sub(self._wikilink, s)
+            s = CITE_GROUP_RE.sub(self._cite_group, s)
         # 3. links [text](url) -> \href{url}{text}; protect url from escaping
         s = re.sub(r"(?<!\!)\[([^\]]*)\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)",
                    lambda m: r"\href{" + self._ph(m.group(2)) + "}{" + m.group(1) + "}",
@@ -365,6 +424,7 @@ def segment(lines):
         elif IMAGE_RE.match(line):
             m = IMAGE_RE.match(line)
             push({"type": "figure", "file": _image_filename(m),
+                  "obsidian": m.group("obsidian") is not None,
                   "caption": None, "human_no": None})
             i += 1
         elif BLOCKQUOTE_RE.match(line):
@@ -541,13 +601,25 @@ def _gap_sep(prev_trail_type, block):
 
 
 class Renderer:
-    def __init__(self, template, inline, hints):
+    def __init__(self, template, inline, hints, figures=None, heading_shift=0):
         self.template = template
         self.inline = inline
         self.hints = hints
+        self.figures = figures          # Figures (copies image files) or None
+        self.heading_shift = heading_shift  # 1 in directory mode: H1 -> \section
+        self.src_name = None            # current source file (directory mode)
+        self.src_dir = Path(".")
+        self.used_labels = set()
         self.eq_n = 0
         self.fig_n = 0
         self.tbl_n = 0
+
+    def set_source(self, path, label_in_hints):
+        self.src_dir = Path(path).resolve().parent
+        self.src_name = Path(path).name if label_in_hints else None
+
+    def hint(self, msg):
+        self.hints.append(f"[{self.src_name}] {msg}" if self.src_name else msg)
 
     # -- block association (captions, subproblems) --------------------------
     def associate(self, blocks):
@@ -608,9 +680,12 @@ class Renderer:
 
     # -- individual blocks --------------------------------------------------
     def r_heading(self, b):
-        level = b["level"]
+        # directory mode shifts every file's headings down one level, so each
+        # file's H1 is a \section and its H2 a \subsection (capped at
+        # \subparagraph)
+        level = b["level"] + self.heading_shift
         if level == 1:
-            self.hints.append(
+            self.hint(
                 f"Extra H1 heading in body treated as \\section: {b['text']!r}")
             cmd = "section"
         else:
@@ -637,7 +712,7 @@ class Renderer:
 
         if self.template not in CALLOUT_TEMPLATES:
             # template has no callout environments; degrade to a plain quote
-            self.hints.append(
+            self.hint(
                 f"callout [!{kind}] degraded to quote (template "
                 f"'{self.template}' has no callout environments)")
             head = ("\\textbf{" + title + "}\\\\\n") if title else ""
@@ -646,7 +721,7 @@ class Renderer:
         if kind in CALLOUT_THEOREM_MAP:
             env = CALLOUT_THEOREM_MAP[kind]
             if env == "law" and not title:
-                self.hints.append(
+                self.hint(
                     "callout [!law] has no title, but the law environment "
                     "requires one — add a title in \\begin{callout}[{...}]{law}")
                 opt = "[{}]"
@@ -664,7 +739,7 @@ class Renderer:
                     + inner + "\n\\end{" + kind + "}")
 
         # unknown type: keep the box (and the author's title) via the fallback env
-        self.hints.append(
+        self.hint(
             f"callout [!{kind}] is not mapped; rendered as "
             f"'{CALLOUT_FALLBACK_ENV}' box — change the environment if a "
             f"better fit exists (see CALLOUT_THEOREM_MAP / CALLOUT_BOX_ENVS)")
@@ -706,12 +781,18 @@ class Renderer:
             raw = m.group(1)
             safe = re.sub(r"[^0-9A-Za-z]+", "_", raw).strip("_") or str(self.eq_n)
             label = f"eq:eq{safe}"
+            # the same \tag{N} may recur (e.g. each merged file restarts at 1)
+            k = 2
+            while label in self.used_labels:
+                label = f"eq:eq{safe}_{k}"
+                k += 1
+            self.used_labels.add(label)
             labels.append((raw, label))
             return f"\\label{{{label}}}"
 
         new = TAG_RE.sub(repl, text)
         for raw, label in labels:
-            self.hints.append(
+            self.hint(
                 f"equation \\tag{{{raw}}} -> \\label{{{label}}}  "
                 f"(rename to a semantic name if helpful; update its references)")
         return new, labels
@@ -721,16 +802,20 @@ class Renderer:
         label = f"fig:fig{self.fig_n}"
         caption = b["caption"] or ""
         if not caption:
-            self.hints.append(
+            self.hint(
                 f"figure '{b['file']}' has no caption (empty \\caption{{}}); "
                 f"label {label}")
         if b.get("human_no"):
-            self.hints.append(
+            self.hint(
                 f"figure source number {b['human_no']} -> {label}")
+        path = b["file"]
+        if self.figures is not None:
+            path = self.figures.place(b["file"], b.get("obsidian", False),
+                                      self.src_dir, self.hint)
         return (
             "\\begin{figure}[h]\n"
             "  \\centering\n"
-            f"  \\includegraphics[width=0.65\\linewidth]{{{b['file']}}}\n"
+            f"  \\includegraphics[width=0.65\\linewidth]{{{path}}}\n"
             f"  \\caption{{{caption}}}\n"
             f"  \\label{{{label}}}\n"
             "\\end{figure}"
@@ -741,11 +826,11 @@ class Renderer:
         label = f"table:table{self.tbl_n}"
         caption = b["caption"] or ""
         if not caption:
-            self.hints.append(
+            self.hint(
                 f"table #{self.tbl_n} has no caption (empty \\caption{{}}); "
                 f"label {label}")
         if b.get("human_no"):
-            self.hints.append(
+            self.hint(
                 f"table source number {b['human_no']} -> {label}")
         cols = "".join(b["aligns"])
         lines = []
@@ -795,7 +880,7 @@ class Renderer:
                 body += _gap_sep(prev_trail, bb) + self.render_block(bb)
                 prev_trail = bb["type"]
             items.append("\\item " + body)
-        self.hints.append(
+        self.hint(
             f"subproblems environment generated from {len(groups)} '**(x)**' "
             f"item(s); confirm the (a)/(b)/... order matches the source")
         return "\\begin{subproblems}\n" + "\n".join(items) + "\n\\end{subproblems}"
@@ -848,83 +933,480 @@ REF_PATTERNS = [
 ]
 
 
-def scan_reference_candidates(body_lines):
+def scan_reference_candidates(body_lines, first_line=1, src_name=None):
+    """Return [(location, matched_text)]; location is 'file.md:LINE' (or
+    'line N' for a single input), LINE being the line number in the source."""
     found = []
-    for idx, line in enumerate(body_lines, start=1):
+    for idx, line in enumerate(body_lines):
+        line_no = first_line + idx
+        loc = f"{src_name}:{line_no}" if src_name else f"line {line_no}"
         for pat in REF_PATTERNS:
             for m in pat.finditer(line):
-                found.append((idx, m.group(0)))
+                found.append((loc, m.group(0)))
     return found
+
+
+# ---------------------------------------------------------------------------
+# Obsidian vault: link resolution (citations, embedded figures)
+# ---------------------------------------------------------------------------
+
+def find_vault_root(start):
+    """Nearest ancestor (inclusive) holding an Obsidian ``.obsidian/`` folder;
+    falls back to ``start`` itself."""
+    start = Path(start).resolve()
+    for d in (start, *start.parents):
+        if (d / ".obsidian").is_dir():
+            return d
+    return start
+
+
+class Vault:
+    """Resolves Obsidian link targets roughly the way Obsidian does: first
+    relative to the linking note, then anywhere in the vault by file name
+    (case-insensitive; a ``dir/name`` link must match as a path suffix). The
+    vault is indexed lazily, only when a lookup misses locally."""
+
+    def __init__(self, root):
+        self.root = Path(root).resolve()
+        self._by_name = None
+
+    def _index(self):
+        if self._by_name is None:
+            idx = {}
+            for dirpath, dirnames, filenames in os.walk(self.root):
+                dirnames[:] = sorted(d for d in dirnames
+                                     if d not in VAULT_SKIP_DIRS
+                                     and not d.startswith("."))
+                for fn in sorted(filenames):
+                    idx.setdefault(fn.lower(), []).append(Path(dirpath) / fn)
+            self._by_name = idx
+        return self._by_name
+
+    def find(self, link, src_dir, ext=None):
+        """Return (path, other_matches) for an Obsidian link target, or
+        (None, []). ``ext`` (e.g. '.md') is tried when the link has none."""
+        link = link.strip().replace("\\", "/").lstrip("/")
+        if not link:
+            return None, []
+        forms = [link]
+        if ext and not link.lower().endswith(ext):
+            forms.insert(0, link + ext)
+        for f in forms:
+            p = Path(src_dir) / f
+            if p.is_file():
+                return p.resolve(), []
+        for f in forms:
+            hits = self._index().get(f.rsplit("/", 1)[-1].lower(), [])
+            if "/" in f:
+                suffix = "/" + f.lower()
+                hits = [h for h in hits if h.as_posix().lower().endswith(suffix)]
+            if hits:
+                hits = sorted(hits, key=lambda p: (len(p.parts), p.as_posix()))
+                return hits[0].resolve(), hits[1:]
+        return None, []
+
+
+# ---------------------------------------------------------------------------
+# Citations: [[note]] -> \cite{key}, BibTeX records collected into <stem>.bib
+# ---------------------------------------------------------------------------
+
+BIB_ENTRY_HEAD_RE = re.compile(r"@\s*([A-Za-z]+)\s*\{\s*([^,\s{}]+)\s*,")
+BIB_NON_ENTRY_TYPES = {"comment", "string", "preamble"}
+
+
+def split_bib_entries(text):
+    """Return [(key, entry_text)] for each brace-balanced @type{key, ...}."""
+    out = []
+    pos = 0
+    for m in BIB_ENTRY_HEAD_RE.finditer(text):
+        if m.start() < pos or m.group(1).lower() in BIB_NON_ENTRY_TYPES:
+            continue
+        depth = 0
+        j = text.index("{", m.start())
+        while j < len(text):
+            if text[j] == "{":
+                depth += 1
+            elif text[j] == "}":
+                depth -= 1
+                if depth == 0:
+                    break
+            j += 1
+        if depth != 0:
+            continue  # unbalanced; skip rather than emit a broken record
+        out.append((m.group(2), text[m.start():j + 1].strip()))
+        pos = j + 1
+    return out
+
+
+def extract_bibtex_blocks(md_text):
+    """Concatenated content of every ```bibtex / ```bib fenced block."""
+    blocks = []
+    lines = md_text.splitlines()
+    i = 0
+    while i < len(lines):
+        m = FENCE_RE.match(lines[i])
+        if not m:
+            i += 1
+            continue
+        fence = m.group(2)
+        lang = (m.group(3).strip().split() or [""])[0].lower()
+        buf = []
+        i += 1
+        while i < len(lines) and not re.match(
+                rf"^\s*{re.escape(fence[0])}{{{len(fence)},}}\s*$", lines[i]):
+            buf.append(lines[i])
+            i += 1
+        i += 1
+        if lang in BIBTEX_FENCE_LANGS:
+            blocks.append("\n".join(buf))
+    return "\n".join(blocks)
+
+
+class Citations:
+    """Turns wikilinks to "reference notes" (notes with a ```bibtex block) into
+    citation keys and collects each record once (deduplicated by key)."""
+
+    def __init__(self, vault):
+        self.vault = vault
+        self.entries = {}       # key.lower() -> (key, text, note path)
+        self._notes = {}        # note path -> (key, text, n_entries) | None
+        self.unresolved = {}    # (src, link) -> reason   (insertion-ordered)
+        self.conflicts = []
+        self.src_name = None
+        self.src_dir = Path(".")
+
+    def set_source(self, path, label_in_hints):
+        self.src_dir = Path(path).resolve().parent
+        self.src_name = Path(path).name if label_in_hints else None
+
+    def note_record(self, path):
+        """(key, text, n_entries) of the first BibTeX record in a note, or None."""
+        if path not in self._notes:
+            rec = None
+            try:
+                entries = split_bib_entries(
+                    extract_bibtex_blocks(path.read_text(encoding="utf-8")))
+            except (OSError, UnicodeDecodeError):
+                entries = []
+            if entries:
+                rec = (entries[0][0], entries[0][1], len(entries))
+            self._notes[path] = rec
+        return self._notes[path]
+
+    def resolve_note(self, link_text):
+        target = link_text.replace("\\|", "|").split("|", 1)[0]
+        note = target.split("#", 1)[0].strip()
+        if not note:
+            return None
+        path, _ = self.vault.find(note, self.src_dir, ".md")
+        return path if path is not None and path.suffix.lower() == ".md" else None
+
+    def cite(self, link_text):
+        """Inline callback: bib key for a citation wikilink, else None."""
+        path = self.resolve_note(link_text)
+        if path is None:
+            self.unresolved.setdefault((self.src_name, link_text), "note not found")
+            return None
+        rec = self.note_record(path)
+        if rec is None:
+            self.unresolved.setdefault((self.src_name, link_text),
+                                       f"no ```bibtex block in {path.name}")
+            return None
+        key, text, n = rec
+        known = self.entries.get(key.lower())
+        if known is None:
+            self.entries[key.lower()] = (key, text, path)
+            if n > 1:
+                self.conflicts.append(
+                    f"{path.name} holds {n} BibTeX records; only the first "
+                    f"('{key}') is cited and added")
+        elif known[2] != path and _norm_ws(known[1]) != _norm_ws(text):
+            self.conflicts.append(
+                f"BibTeX key '{key}' appears in both {known[2].name} and "
+                f"{path.name} with different content; kept the first")
+        return known[0] if known else key
+
+
+def _norm_ws(s):
+    return re.sub(r"\s+", " ", s).strip()
+
+
+def write_bib(path, entries):
+    """Merge ``entries`` [(key, text)] into the .bib at ``path``: existing
+    records are kept verbatim and only keys not yet present are appended.
+    Returns (n_added, skipped_keys)."""
+    existing = path.read_text(encoding="utf-8") if path.exists() else ""
+    have = {m.group(2).lower() for m in BIB_ENTRY_HEAD_RE.finditer(existing)}
+    new = [(k, t) for k, t in entries if k.lower() not in have]
+    skipped = [k for k, _ in entries if k.lower() in have]
+    if new or not path.exists():
+        parts = [existing.rstrip()] if existing.strip() else []
+        parts += [t for _, t in new]
+        path.write_text("\n\n".join(parts) + "\n", encoding="utf-8")
+    return len(new), skipped
+
+
+# ---------------------------------------------------------------------------
+# Figures: copy image files next to the .tex (or into --figdir)
+# ---------------------------------------------------------------------------
+
+# characters that are unsafe in an \includegraphics file name
+_UNSAFE_FIG_CHARS_RE = re.compile(r"[\s#%&{}~$^\\]+")
+
+
+class Figures:
+    def __init__(self, vault, outdir, figdir="."):
+        self.vault = vault
+        self.dest_dir = (Path(outdir) / figdir).resolve()
+        rel = Path(figdir).as_posix().strip("/")
+        self.prefix = "" if rel in ("", ".") else rel + "/"
+        self.by_src = {}      # source path -> path used in \includegraphics
+        self.taken = {}       # dest file name (lower) -> source path
+        self.copied = []
+        self.missing = []
+
+    def place(self, ref, obsidian, src_dir, hint):
+        """Copy the image ``ref`` and return the path for \\includegraphics."""
+        if re.match(r"^[A-Za-z][A-Za-z0-9+.-]*://", ref):
+            hint(f"figure '{ref}' is a remote URL; download it and fix "
+                 f"\\includegraphics by hand")
+            return ref
+        if obsidian:
+            src, _ = self.vault.find(ref, src_dir)
+        else:
+            cand = Path(src_dir) / unquote(ref)
+            src = cand.resolve() if cand.is_file() else None
+        if src is None:
+            self.missing.append(ref)
+            hint(f"figure file '{ref}' not found (searched next to the note and "
+                 f"in {self.vault.root}); \\includegraphics left as-is")
+            return ref
+        if src in self.by_src:
+            return self.by_src[src]
+        name = _UNSAFE_FIG_CHARS_RE.sub("_", src.name)
+        stem, dot, ext = name.rpartition(".")
+        if not dot:
+            stem, ext = name, ""
+        k = 2
+        while name.lower() in self.taken and self.taken[name.lower()] != src:
+            name = f"{stem}_{k}.{ext}" if ext else f"{stem}_{k}"
+            k += 1
+        if name != src.name:
+            hint(f"figure '{src.name}' copied as '{name}' (unsafe characters "
+                 f"or a name clash)")
+        self.taken[name.lower()] = src
+        dest = self.dest_dir / name
+        self.dest_dir.mkdir(parents=True, exist_ok=True)
+        if not (dest.exists() and dest.resolve() == src):
+            shutil.copy2(src, dest)
+        self.copied.append(dest)
+        self.by_src[src] = self.prefix + name
+        return self.by_src[src]
+
+
+# ---------------------------------------------------------------------------
+# Input loading (single file / directory)
+# ---------------------------------------------------------------------------
+
+H1_RE = re.compile(r"^#\s+(.*?)\s*#*\s*$")
+
+
+def load_md(path):
+    """Read one Markdown file -> dict(path, tags, title, body_lines, first_line).
+
+    ``title`` is the first H1 (None if absent); ``body_lines`` are the lines
+    after it (the whole post-frontmatter text when there is no H1);
+    ``first_line`` is the 1-based source line number of body_lines[0]."""
+    path = Path(path)
+    tags, after_fm, fm_lines = parse_frontmatter(path.read_text(encoding="utf-8"))
+    lines = after_fm.splitlines()
+    for k, line in enumerate(lines):
+        m = H1_RE.match(line)
+        if m:
+            return {"path": path, "tags": tags, "title": m.group(1),
+                    "body_lines": lines[k + 1:], "first_line": fm_lines + k + 2}
+    return {"path": path, "tags": tags, "title": None,
+            "body_lines": lines, "first_line": fm_lines + 1}
+
+
+def natural_key(name):
+    """Sort key comparing digit runs numerically: '2_x' < '10_x'."""
+    return [int(t) if t.isdigit() else t.lower() for t in re.split(r"(\d+)", name)]
+
+
+def is_abstract_name(path):
+    stem = re.sub(r"^[\d\s._-]+", "", Path(path).stem)
+    return stem.lower() in ABSTRACT_STEMS
+
+
+def collect_dir(dirpath, abstract_opt, citations):
+    """Return (abstract_path | None, [chapter paths], hints) for a directory."""
+    hints = []
+    files = sorted((p for p in Path(dirpath).iterdir()
+                    if p.is_file() and p.suffix.lower() == ".md"
+                    and not p.name.startswith(".")),
+                   key=lambda p: (natural_key(p.name), p.name))
+    if abstract_opt:
+        abstract = Path(abstract_opt).resolve()
+        if not abstract.is_file():
+            raise SystemExit(f"error: --abstract file not found: {abstract_opt}")
+    else:
+        found = [p for p in files if is_abstract_name(p)]
+        if len(found) > 1:
+            raise SystemExit("error: several abstract files ("
+                             + ", ".join(p.name for p in found)
+                             + "); choose one with --abstract")
+        abstract = found[0].resolve() if found else None
+    chapters = [p for p in files if p.resolve() != abstract]
+
+    # Reference notes (cited, holding a ```bibtex block) that live in the same
+    # directory are bibliography sources, not chapters.
+    chapter_set = {p.resolve() for p in chapters}
+    bib_notes = set()
+    for p in chapters + ([abstract] if abstract else []):
+        citations.set_source(p, False)
+        for m in WIKILINK_RE.finditer(p.read_text(encoding="utf-8")):
+            t = citations.resolve_note(m.group(1))
+            if t in chapter_set and citations.note_record(t) is not None:
+                bib_notes.add(t)
+    if bib_notes:
+        hints.append("reference notes excluded from the body: "
+                     + ", ".join(sorted(p.name for p in bib_notes)))
+    chapters = [p for p in chapters if p.resolve() not in bib_notes]
+    if not chapters:
+        raise SystemExit(f"error: no Markdown chapter files in {dirpath}")
+    return abstract, chapters, hints
 
 
 # ---------------------------------------------------------------------------
 # Template assembly
 # ---------------------------------------------------------------------------
 
-def assemble(template_dir, title_latex, body_latex):
+def assemble(template_dir, title_latex, body_latex, abstract_latex=None,
+             bib_name=None):
     main = (template_dir / "main.tex").read_text(encoding="utf-8")
-    # replace the placeholder title (templates ship literally as \title{title})
-    main = re.sub(r"\\title\{[^}]*\}", lambda _m: "\\title{" + title_latex + "}",
-                  main, count=1)
+    # replace the placeholder title (templates ship literally as \title{title});
+    # None keeps the placeholder
+    if title_latex is not None:
+        main = re.sub(r"\\title\{[^}]*\}",
+                      lambda _m: "\\title{" + title_latex + "}", main, count=1)
     # links need hyperref, which the templates do not load; inject it on demand
     # so the output compiles without editing the templates themselves.
     if "\\href" in body_latex and "hyperref" not in main:
         main = main.replace("\\begin{document}",
                             "\\usepackage{hyperref}\n\\begin{document}", 1)
-    # insert the body right after \maketitle
+    if bib_name:
+        end = main.rfind("\\end{document}")
+        main = (main[:end] + f"\\bibliographystyle{{{BIB_STYLE}}}\n"
+                f"\\bibliography{{{bib_name}}}\n" + main[end:])
+    # insert the (abstract and) body right after \maketitle
     marker = "\\maketitle"
     pos = main.find(marker)
     if pos == -1:
         raise RuntimeError("template main.tex has no \\maketitle")
     insert_at = pos + len(marker)
-    return main[:insert_at] + "\n\n" + body_latex + "\n" + main[insert_at:]
+    head = ""
+    if abstract_latex:
+        head = "\\begin{abstract}\n" + abstract_latex + "\n\\end{abstract}\n\n"
+    return main[:insert_at] + "\n\n" + head + body_latex + "\n" + main[insert_at:]
 
 
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
-def convert(md_path, outdir, template_override=None):
-    md_path = Path(md_path)
-    raw = md_path.read_text(encoding="utf-8")
+def convert(input_path, outdir, template_override=None, abstract_opt=None,
+            vault_opt=None, figdir="."):
+    inp = Path(input_path)
+    if not inp.exists():
+        raise SystemExit(f"error: no such file or directory: {input_path}")
+    dir_mode = inp.is_dir()
+    if abstract_opt and not dir_mode:
+        raise SystemExit("error: --abstract requires a directory input")
 
-    tags, after_fm = parse_frontmatter(raw)
+    base_dir = inp.resolve() if dir_mode else inp.resolve().parent
+    vault = Vault(vault_opt if vault_opt else find_vault_root(base_dir))
+    citations = Citations(vault)
+    hints = []
 
-    # body = from the first H1 line downward (title from that H1)
-    body_lines_all = after_fm.splitlines()
-    title = None
-    body_lines = []
-    for k, line in enumerate(body_lines_all):
-        m = re.match(r"^#\s+(.*?)\s*#*\s*$", line)
-        if m:
-            title = m.group(1)
-            body_lines = body_lines_all[k + 1:]
-            break
-    if title is None:
-        raise SystemExit("error: no H1 ('# title') heading found; nothing to convert")
+    if dir_mode:
+        abstract_path, chapter_paths, dir_hints = collect_dir(
+            inp, abstract_opt, citations)
+        hints += dir_hints
+        abstract_doc = load_md(abstract_path) if abstract_path else None
+        docs = [load_md(p) for p in chapter_paths]
+        stem = inp.resolve().name
+        if abstract_doc is None:
+            title = None
+            hints.append("no abstract file (e.g. 00_abstract.md): \\title{title} "
+                         "left as a placeholder — ask the user for the title")
+        else:
+            title = abstract_doc["title"]
+            if title is None:
+                hints.append(f"abstract file {abstract_path.name} has no H1: "
+                             f"\\title{{title}} left as a placeholder")
+        for d in docs:
+            if d["title"] is None:
+                hints.append(f"[{d['path'].name}] no H1 heading: included "
+                             f"without a \\section heading")
+    else:
+        abstract_doc = None
+        docs = [load_md(inp)]
+        stem = inp.stem
+        title = docs[0]["title"]
+        if title is None:
+            raise SystemExit("error: no H1 ('# title') heading found; "
+                             "nothing to convert")
 
-    body_text = "\n".join(body_lines)
+    all_docs = ([abstract_doc] if abstract_doc else []) + docs
+    body_text = "\n".join("\n".join(d["body_lines"]) for d in all_docs)
     if template_override:
         template = template_override
         reason = "forced via --template"
     else:
+        tags = [t for d in all_docs for t in d["tags"]]
         template, reason = select_template(tags, body_text)
     if template not in VALID_TEMPLATES:
         raise SystemExit(f"error: unknown template '{template}'")
 
-    inline = Inline()
-    hints = []
-    renderer = Renderer(template, inline, hints)
-    blocks = segment(body_lines)
-    body_latex = renderer.render(blocks)
-    title_latex = inline.convert(title)
-
-    template_dir = Path(__file__).resolve().parent.parent / "templates" / template
-    tex = assemble(template_dir, title_latex, body_latex)
-
     outdir = Path(outdir)
     outdir.mkdir(parents=True, exist_ok=True)
-    stem = md_path.stem
+
+    inline = Inline(cite=citations.cite)
+    figures = Figures(vault, outdir, figdir)
+    renderer = Renderer(template, inline, hints, figures,
+                        heading_shift=1 if dir_mode else 0)
+
+    refs = []
+
+    def render_doc(d, with_heading):
+        renderer.set_source(d["path"], dir_mode)
+        citations.set_source(d["path"], dir_mode)
+        blocks = segment(d["body_lines"])
+        if with_heading and d["title"] is not None:
+            blocks.insert(0, {"type": "heading", "level": 1, "text": d["title"],
+                              "blank_before": False, "span_before": False})
+        refs.extend(scan_reference_candidates(
+            d["body_lines"], d["first_line"],
+            d["path"].name if dir_mode else None))
+        return renderer.render(blocks)
+
+    abstract_latex = render_doc(abstract_doc, False) if abstract_doc else None
+    parts = [render_doc(d, dir_mode) for d in docs]
+    body_latex = "\n\n".join(p for p in parts if p)
+    title_latex = inline.convert(title) if title is not None else None
+
+    for (src, link), reason_ in citations.unresolved.items():
+        where = f"[{src}] " if src else ""
+        hints.append(f"{where}wikilink [[{link}]] is not a citation ({reason_}); "
+                     f"left as literal text — rewrite or remove it")
+    hints += citations.conflicts
+
+    template_dir = Path(__file__).resolve().parent.parent / "templates" / template
+    bib_name = stem if citations.entries else None
+    tex = assemble(template_dir, title_latex, body_latex, abstract_latex,
+                   bib_name)
+
     tex_out = outdir / f"{stem}.tex"
     latexmkrc_out = outdir / "latexmkrc"
     tex_out.write_text(tex, encoding="utf-8")
@@ -948,7 +1430,20 @@ def convert(md_path, outdir, template_override=None):
                               encoding="utf-8")
         written.append(config_out)
 
-    refs = scan_reference_candidates(body_lines)
+    if bib_name:
+        bib_out = outdir / f"{stem}.bib"
+        entries = [(k, t) for k, t, _ in citations.entries.values()]
+        added, skipped = write_bib(bib_out, entries)
+        written.append(bib_out)
+        hints.append(f"bibliography: {len(entries)} cited record(s), {added} "
+                     f"added to {bib_out.name}"
+                     + (f"; already present, kept as-is: {', '.join(skipped)}"
+                        if skipped else "")
+                     + f" (style {BIB_STYLE})")
+    if figures.copied:
+        written.append(f"{len(figures.copied)} figure file(s) -> "
+                       f"{figures.dest_dir}")
+
     _print_report(template, reason, written, hints, refs)
     return tex_out
 
@@ -970,23 +1465,36 @@ def _print_report(template, reason, written, hints, refs):
         print(f"  - {h}", file=e)
     if refs:
         print("", file=e)
-        print("  Cross-reference CANDIDATES in body (rewrite to \\eqref/\\ref"
+        print("  Cross-reference CANDIDATES in the source (rewrite to \\eqref/\\ref"
               " using the label map above; verify each). Put a non-breaking"
               " space '~' before the macro, e.g. 式~\\eqref{eq:..}, 図~\\ref{fig:..}:",
               file=e)
-        for line_no, text in refs:
-            print(f"    body line {line_no}: {text}", file=e)
+        for loc, text in refs:
+            print(f"    {loc}: {text}", file=e)
     print("=" * 70, file=e)
 
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description="Convert Markdown to LaTeX.")
-    ap.add_argument("markdown", help="input Markdown file")
+    ap.add_argument("markdown",
+                    help="input Markdown file, or a directory whose *.md files "
+                         "are merged in natural filename order")
     ap.add_argument("--outdir", default=".", help="output directory (default: cwd)")
     ap.add_argument("--template", choices=sorted(VALID_TEMPLATES),
                     help="force a template instead of auto-selecting")
+    ap.add_argument("--abstract",
+                    help="(directory input) abstract file; default: the file "
+                         "named 'abstract' (e.g. 00_abstract.md) if any")
+    ap.add_argument("--vault",
+                    help="root for resolving Obsidian [[links]] / ![[embeds]] "
+                         "(default: nearest ancestor with .obsidian/, else the "
+                         "input's directory)")
+    ap.add_argument("--figdir", default=".",
+                    help="where to copy figure files, relative to --outdir "
+                         "(default: '.', i.e. next to the .tex)")
     args = ap.parse_args(argv)
-    convert(args.markdown, args.outdir, args.template)
+    convert(args.markdown, args.outdir, args.template, args.abstract,
+            args.vault, args.figdir)
 
 
 if __name__ == "__main__":

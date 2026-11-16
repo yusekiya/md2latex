@@ -27,6 +27,14 @@ directory. The `latexmkrc`'s default target is set to `target.tex`, so a bare
   (`> [!theorem]`, `> [!definition]`, `> [!info]`, …) → the templates'
   theorem/callout box environments; and (exercise) `**(a)**` subproblems → a
   `subproblems` environment.
+- Accepts a **directory** too: all its `*.md` files are merged into one
+  `<dirname>.tex` in natural filename order (`2_x` before `10_x`), each file's
+  H1 becoming a `\section`. A `00_abstract.md`-style file becomes the
+  `abstract` and its H1 the document title.
+- Turns Obsidian wikilinks to reference notes (`[[Smith2020]]`, where the note
+  holds a ```` ```bibtex ```` code block) into `\cite{key}` and collects each
+  record once into `<basename>.bib`.
+- Copies figure files next to the generated `.tex` (or into `--figdir DIR`).
 - Leaves the Markdown source untouched and translates **grammar only** — the
   author's wording is preserved.
 
@@ -81,7 +89,12 @@ You can also run the converter directly:
 
 ```bash
 python3 skills/md2latex/scripts/md2latex.py target.md [--outdir DIR] [--template NAME]
+python3 skills/md2latex/scripts/md2latex.py paper_dir/ [--abstract FILE] \
+        [--vault DIR] [--figdir DIR] [--outdir DIR] [--template NAME]
 ```
+
+`--vault` sets where Obsidian links/embeds are resolved (default: the nearest
+ancestor containing `.obsidian/`, else the input's directory).
 
 ## Repository layout
 

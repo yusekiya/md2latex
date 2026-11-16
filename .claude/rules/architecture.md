@@ -18,9 +18,12 @@ meant (which label, which reference, what caption), it belongs in the hints.
 ## Data flow
 
 ```
-target.md ──▶ parse frontmatter ──▶ select template ──▶ extract H1-down body
-          ──▶ segment into blocks ──▶ render blocks (inline conv.) ──▶ assemble
-          ──▶ write <basename>.tex + latexmkrc (+ config.tex) ──▶ print hints (stderr)
+target.md | dir/ ──▶ (dir) collect *.md, natural order, pick abstract, drop ref notes
+          ──▶ load_md each (frontmatter, H1, body) ──▶ select template
+          ──▶ segment into blocks ──▶ render blocks (inline conv. + \cite, figure copy)
+          ──▶ assemble (title, abstract, body, \bibliography)
+          ──▶ write <basename>.tex + latexmkrc (+ config.tex, .bib, figures)
+          ──▶ print hints (stderr)
                                                         │
                                                         ▼
                                           agent applies targeted Edits ──▶ latexmk
@@ -42,16 +45,30 @@ target.md ──▶ parse frontmatter ──▶ select template ──▶ extrac
   body; degrades to `quote` on templates without callout envs); groups exercise
   subproblems; numbers `eq/fig/table` labels deterministically.
 - `Inline` — converts text spans only; protects inline code/math/URLs, converts
-  decoration/links/footnotes, escapes a minimal set of specials. **Never** runs
-  on math or code content.
-- `assemble` — substitutes `\title`, injects `hyperref` only when links are
-  used, inserts the body after `\maketitle`. `convert` copies the template's
+  citation wikilinks (via the `Citations.cite` callback; adjacent ones merged
+  into one `\cite{a,b}`), decoration/links/footnotes, escapes a minimal set of
+  specials. **Never** runs on math or code content.
+- `load_md` / `collect_dir` — per-file frontmatter/H1/body (with source line
+  offset); directory listing in natural order, abstract detection
+  (`ABSTRACT_STEMS`), exclusion of cited reference notes from the chapters.
+  In directory mode the `Renderer` gets `heading_shift=1` (H1 → `\section`)
+  and prefixes hints with the source file; `\tag` labels are de-duplicated.
+- `Vault` — Obsidian-style link resolution (note dir first, then vault-wide by
+  file name; lazy index). Root = nearest `.obsidian/` ancestor or `--vault`.
+- `Citations` / `write_bib` — first ```` ```bibtex ```` record of a linked note →
+  cite key; each key added once; an existing `.bib` is merged (append-only).
+- `Figures` — copies images next to the `.tex` (or `--figdir`), sanitizing
+  names and resolving clashes; missing files are reported, never faked.
+- `assemble` — substitutes `\title` (kept as placeholder when there is no
+  title), injects `hyperref` only when links are used, inserts the abstract
+  and body after `\maketitle`, adds `\bibliography` when something is cited. `convert` copies the template's
   `latexmkrc` while rewriting its `@default_files` target from `main.tex` to
   `<basename>.tex` (so a bare `latexmk` builds the output), and also copies the
   template's `config.tex` (the split-out preamble, `\input{config}`) next to
   the output when the template ships one.
 - Hints — equation tag→label map, figure/table source-number→label map, empty
-  captions, reference candidates (regex, line numbers), subproblem ranges.
+  captions, reference candidates (regex, `file:line` source positions),
+  subproblem ranges, unresolved wikilinks, missing/renamed figures, bib summary.
 
 ## Why the script does NOT rewrite prose cross-references
 
