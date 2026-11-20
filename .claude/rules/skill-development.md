@@ -62,13 +62,12 @@ Steps, once the maintenance checklist above passes:
    Claude cannot run this and must not try to edit settings to bypass it.** Claude
    prepares the notes file and hands the user the exact command to run themselves
    (e.g. `! gh release create …`).
-4. Refresh installed copies: `gh skill update --all` (run from `$HOME`, **not**
-   inside this repo). The skill is installed at **user scope for more than one
-   agent** (`~/.claude/skills/md2latex` for Claude Code, `~/.copilot/skills/md2latex`
-   for GitHub Copilot); a home-dir update refreshes all of them, so seeing two
-   `✓ Updated md2latex` lines is expected, not a duplicate bug. Verify with
-   `grep github-ref <install>/SKILL.md` → `refs/tags/vX.Y.Z`.
+4. Refresh the installed copy: `gh skill update --all` (run from `$HOME`,
+   **not** inside this repo). The skill is installed once, at **user scope for
+   Claude Code only** (`~/.claude/skills/md2latex`), so expect a single
+   `✓ Updated md2latex` line. Verify with
+   `grep github-ref ~/.claude/skills/md2latex/SKILL.md` → `refs/tags/vX.Y.Z`.
 
 Gotcha: running `gh skill list`/`update` *inside* this repo also surfaces the
 source tree as a `project`-scope `n/a (published)` entry with no metadata — ignore
-it; only the `$HOME`-scope copies are real installs to update.
+it; only the `$HOME`-scope copy is a real install to update.
