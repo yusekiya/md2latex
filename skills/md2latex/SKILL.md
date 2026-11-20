@@ -61,7 +61,9 @@ Let `SKILL_DIR` be the directory containing this SKILL.md.
      `eq:sin_function`) — if you do, update every reference to it.
    - **Cross-references**: rewrite the listed prose references to
      `\eqref{eq:...}` (equations) or `\ref{...}` (figures/tables/sections),
-     using the label map in the hints. **Verify each candidate** — some matches
+     using the label map in the hints, tied with `~` to the preceding
+     character (`式~\eqref{…}`, `Fig.~\ref{…}`; not after `(` or in
+     `第\ref{…}節`). **Verify each candidate** — some matches
      (e.g. a number that appears inside a caption) are not references. For a
      referenced section, add a `\label{sec:...}` to that `\section` first.
    - **Empty captions**: figures/tables with no adjacent `>` caption block get

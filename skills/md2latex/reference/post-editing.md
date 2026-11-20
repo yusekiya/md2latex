@@ -30,8 +30,12 @@ numbers and the matched text). For each candidate:
 - Decide whether it is really a cross-reference. **Skip false positives** — e.g.
   the `表1` that appears *inside a caption blockquote* is the source's own
   numbering, not a reference; a bare `(1)` may be an enumeration.
-- Rewrite genuine references, putting a non-breaking space `~` between the
-  leading reference word and the macro (so they never split across a line):
+- Rewrite genuine references, **always** putting a non-breaking space `~`
+  between the macro and the character before it (so they never split across a
+  line; any space there is replaced by `~`). The only exceptions are right after
+  an opening bracket (`式(\ref{…})`) and `第\ref{…}節`. The script already ties
+  every `\cite` and any `\ref`/`\eqref` from the source this way; keep it so
+  when editing:
   - equation → `式~\eqref{eq:…}` (likewise `Eq.~\eqref{eq:…}`)
   - figure → `図~\ref{fig:…}`, table → `表~\ref{table:…}`
     (likewise `Fig.~\ref{fig:…}`, `Table~\ref{table:…}`)

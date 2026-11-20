@@ -47,6 +47,9 @@ $$
 | alpha | 1     |
 | beta  | 2     |
 
+As listed in Table \ref{table:table1}, values are small (see the
+\eqref{eq:eq1} relation and the footnote^[Values as in Table \ref{table:table1}.]).
+
 Percent signs like 50% and ampersands a & b are escaped in prose.
 Markdown escapes print literally: \[note\], \*not italic\*, snake\_case, \#tag, \$5 and \$6, a\~b, x\^2, \`tick\`, but $\{x\}$ is math.
 

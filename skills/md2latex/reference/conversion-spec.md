@@ -269,6 +269,25 @@ Prior work \cite{smith2020,yamada2021} showed …
 - Any other wikilink (note not found, or no BibTeX block) is left as literal
   text and reported as a hint.
 
+### Non-breaking space before references
+
+`\cite`, `\ref` and `\eqref` (generated or written in the source) are tied to
+the character before them with `~`, so a line never breaks in between. Any
+whitespace there is replaced — including the newline of a wrapped Markdown line
+inside a paragraph, which pulls the reference up onto the previous line:
+
+| Markdown | LaTeX |
+| :------- | :---- |
+| `盛んである [[Smith2020]]．` | `盛んである~\cite{smith2020}．` |
+| `先行研究`⏎`[[Smith2020]] による` | `先行研究~\cite{smith2020} による` |
+| `Table \ref{table:t1}` | `Table~\ref{table:t1}` |
+
+No `~` is added at the start of a text span (`\item \cite{…}`), after an
+opening bracket (`( [ { （ ［ ｛ 「 『 【 〔 〈 《`: `式(\ref{…})`,
+`\footnote{\cite{…}}`), after an existing `~`, after a backslash (`\\`), or
+after `第` (`第\ref{sec:…}節`, spaced by LuaTeX-ja itself). Math and code are
+not affected.
+
 ### Vault
 
 Wikilinks and Obsidian embeds are resolved like Obsidian does: relative to the

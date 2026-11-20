@@ -324,7 +324,28 @@ class Inline:
         # 7. restore protected fragments
         for key, value in self._store.items():
             s = s.replace(key, value)
-        return s.replace(ESC_LBRACK, "{[}").replace(ESC_RBRACK, "{]}")
+        s = s.replace(ESC_LBRACK, "{[}").replace(ESC_RBRACK, "{]}")
+        # 8. tie references to the preceding character
+        return tie_refs(s)
+
+
+# A reference command is tied to the preceding character with '~' (no line
+# break before it). The whitespace between them -- including a newline from a
+# wrapped Markdown line -- is replaced; with none, '~' is inserted.
+TIE_RE = re.compile(r"(?P<prev>\S)\s*(?P<cmd>\\(?:ref|eqref|cite)(?=[\[{]))")
+# ...except after an opening bracket (式(\ref{..}), \footnote{\cite{..}}), an
+# existing tie, a backslash (\\ line break) or 第 (第\ref{sec:..}節 is a
+# Japanese numeral expression, spaced by LuaTeX-ja itself)
+TIE_SKIP_AFTER = set("([{（［｛「『【〔〈《~\\第")
+
+
+def tie_refs(s):
+    """Insert '~' between \\ref / \\eqref / \\cite and the preceding character."""
+    def repl(m):
+        if m.group("prev") in TIE_SKIP_AFTER:
+            return m.group(0)
+        return m.group("prev") + "~" + m.group("cmd")
+    return TIE_RE.sub(repl, s)
 
 
 def _convert_footnotes(s):
@@ -783,7 +804,9 @@ class Renderer:
         return f"\\{cmd}{{{self.inline.convert(b['text'])}}}"
 
     def r_para(self, b):
-        return "\n".join(self.inline.convert(ln) for ln in b["lines"])
+        # tie_refs again on the joined lines: a reference opening a wrapped
+        # line is pulled up onto the previous one
+        return tie_refs("\n".join(self.inline.convert(ln) for ln in b["lines"]))
 
     def r_code(self, b):
         body = "\n".join(b["lines"])
@@ -964,7 +987,7 @@ class Renderer:
             rest_first = m.group(2)
             other = marker["lines"][1:]
             head_lines = ([rest_first] + other) if rest_first or other else [rest_first]
-            body = "\n".join(self.inline.convert(ln) for ln in head_lines)
+            body = tie_refs("\n".join(self.inline.convert(ln) for ln in head_lines))
             prev_trail = "para"
             for bb in g[1:]:
                 body += _gap_sep(prev_trail, bb) + self.render_block(bb)
