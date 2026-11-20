@@ -59,6 +59,10 @@ target.md | dir/ ──▶ (dir) collect *.md, natural order, pick abstract, dro
   cite key; each key added once; an existing `.bib` is merged (append-only).
 - `Figures` — copies images next to the `.tex` (or `--figdir`), sanitizing
   names and resolving clashes; missing files are reported, never faked.
+- `indent_environments` — post-pass on the generated abstract+body (called
+  from `assemble`): re-indents every line by two spaces per `\begin`/`\end`
+  depth; renderers emit flat text and leave indentation to it. `verbatim`
+  bodies and their `\end` line are left at column 0.
 - `assemble` — substitutes `\title` (kept as placeholder when there is no
   title), injects `hyperref` only when links are used, inserts the abstract
   and body after `\maketitle`, adds `\bibliography` when something is cited. `convert` copies the template's

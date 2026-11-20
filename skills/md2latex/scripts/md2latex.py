@@ -581,6 +581,56 @@ TAG_RE = re.compile(r"\\tag\{([^}]*)\}")
 ENV_NAME_RE = re.compile(r"\\(?:begin|end)\{([A-Za-z*]+)\}")
 
 
+INDENT_UNIT = "  "
+# environments whose body is typeset literally: neither their content nor their
+# \end line may be re-indented (spaces before \end{verbatim} print as an extra
+# line)
+VERBATIM_ENVS = {"verbatim", "verbatim*"}
+ENV_TOKEN_RE = re.compile(r"\\(begin|end)\{([A-Za-z*]+)\}")
+LEADING_ENDS_RE = re.compile(r"^(?:\s*\\end\{[A-Za-z*]+\})+")
+
+
+def _code_part(line):
+    """The line up to its first unescaped '%' (LaTeX comment start)."""
+    m = re.search(r"(?<!\\)(?:\\\\)*%", line)
+    return line[:m.start()] if m else line
+
+
+def indent_environments(text):
+    """Re-indent `text` so every line inside an environment is indented by
+    INDENT_UNIT per nesting level (\\begin/\\end depth).
+
+    Leading whitespace is insignificant in LaTeX outside verbatim, so existing
+    indentation (from the source or the renderer) is replaced, not added to.
+    Blank lines stay empty. Verbatim bodies and their \\end line are copied
+    unchanged; only the \\begin{verbatim} line is indented.
+    """
+    out = []
+    depth = 0
+    verbatim_end = None  # the literal "\end{...}" that closes the current verbatim
+    for line in text.split("\n"):
+        if verbatim_end is not None:
+            out.append(line)
+            if verbatim_end in line:
+                verbatim_end = None
+            continue
+        body = line.lstrip()
+        if not body:
+            out.append("")
+            continue
+        code = _code_part(body)
+        lead = LEADING_ENDS_RE.match(code)
+        n_lead = len(ENV_TOKEN_RE.findall(lead.group(0))) if lead else 0
+        out.append(INDENT_UNIT * max(0, depth - n_lead) + body)
+        for kind, name in ENV_TOKEN_RE.findall(code):
+            if kind == "begin" and name in VERBATIM_ENVS:
+                # the rest of this line already belongs to the verbatim body
+                verbatim_end = "\\end{" + name + "}"
+                break
+            depth = depth + 1 if kind == "begin" else max(0, depth - 1)
+    return "\n".join(out)
+
+
 def _gap_sep(prev_trail_type, block):
     """Separator to place before `block`, given the previous block's last type.
 
@@ -814,10 +864,10 @@ class Renderer:
                                       self.src_dir, self.hint)
         return (
             "\\begin{figure}[h]\n"
-            "  \\centering\n"
-            f"  \\includegraphics[width=0.65\\linewidth]{{{path}}}\n"
-            f"  \\caption{{{caption}}}\n"
-            f"  \\label{{{label}}}\n"
+            "\\centering\n"
+            f"\\includegraphics[width=0.65\\linewidth]{{{path}}}\n"
+            f"\\caption{{{caption}}}\n"
+            f"\\label{{{label}}}\n"
             "\\end{figure}"
         )
 
@@ -835,17 +885,17 @@ class Renderer:
         cols = "".join(b["aligns"])
         lines = []
         lines.append("\\begin{table}[h]")
-        lines.append("  \\centering")
-        lines.append(f"  \\caption{{{caption}}}")
-        lines.append(f"  \\label{{{label}}}")
-        lines.append(f"  \\begin{{tabular}}{{ {cols} }}")
-        lines.append("  \\hline")
-        lines.append("  " + self._row(b["header"]))
-        lines.append("  \\hline")
+        lines.append("\\centering")
+        lines.append(f"\\caption{{{caption}}}")
+        lines.append(f"\\label{{{label}}}")
+        lines.append(f"\\begin{{tabular}}{{ {cols} }}")
+        lines.append("\\hline")
+        lines.append(self._row(b["header"]))
+        lines.append("\\hline")
         for row in b["rows"]:
-            lines.append("  " + self._row(row))
-        lines.append("  \\hline")
-        lines.append("  \\end{tabular}")
+            lines.append(self._row(row))
+        lines.append("\\hline")
+        lines.append("\\end{tabular}")
         lines.append("\\end{table}")
         return "\n".join(lines)
 
@@ -887,7 +937,8 @@ class Renderer:
 
 
 def render_list(lines, inline):
-    """Stack-based nested list renderer (itemize/enumerate)."""
+    """Stack-based nested list renderer (itemize/enumerate). Output is flat;
+    indentation is applied afterwards by indent_environments."""
     items = []  # (indent, ordered, content)
     for ln in lines:
         m = LISTITEM_RE.match(ln)
@@ -907,15 +958,15 @@ def render_list(lines, inline):
 
     for indent, ordered, content in items:
         while stack and indent < stack[-1][0]:
-            out.append("  " * (len(stack) - 1) + f"\\end{{{stack[-1][1]}}}")
+            out.append(f"\\end{{{stack[-1][1]}}}")
             stack.pop()
         if not stack or indent > stack[-1][0]:
             env = env_for(ordered)
-            out.append("  " * len(stack) + f"\\begin{{{env}}}")
+            out.append(f"\\begin{{{env}}}")
             stack.append((indent, env))
-        out.append("  " * len(stack) + "\\item " + inline.convert(content))
+        out.append("\\item " + inline.convert(content))
     while stack:
-        out.append("  " * (len(stack) - 1) + f"\\end{{{stack[-1][1]}}}")
+        out.append(f"\\end{{{stack[-1][1]}}}")
         stack.pop()
     return "\n".join(out)
 
@@ -1308,7 +1359,9 @@ def assemble(template_dir, title_latex, body_latex, abstract_latex=None,
     head = ""
     if abstract_latex:
         head = "\\begin{abstract}\n" + abstract_latex + "\n\\end{abstract}\n\n"
-    return main[:insert_at] + "\n\n" + head + body_latex + "\n" + main[insert_at:]
+    # only the generated part is re-indented; the template keeps its own layout
+    content = indent_environments(head + body_latex)
+    return main[:insert_at] + "\n\n" + content + "\n" + main[insert_at:]
 
 
 # ---------------------------------------------------------------------------

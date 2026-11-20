@@ -27,6 +27,19 @@ $$
 
 See Eq. (1) above. A footnote follows.\footnote{An existing LaTeX footnote.}
 
+Nested math environments are indented by depth:
+
+$$
+f(x) =
+\begin{cases}
+\begin{aligned}
+&1 \\
+&2
+\end{aligned} & x > 0 \\
+0 & \text{otherwise}
+\end{cases}
+$$
+
 ## A table
 
 | Name  | Value |
@@ -58,7 +71,12 @@ Percent signs like 50% and ampersands a & b are escaped in prose.
 > A summary box using its default title.
 
 > [!info] Extra information
-> An info box with an explicit title.
+> An info box with an explicit title. Code inside a box keeps its own layout:
+>
+> ```
+> def f(x):
+>     return x  # \begin{x} is literal here
+> ```
 
 ## Exercises and solutions
 

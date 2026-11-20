@@ -83,7 +83,7 @@ Language is detected by comparing kana+kanji vs. Latin-letter counts.
   →
   ```latex
   \begin{equation}
-  f(x) = \sin \theta
+    f(x) = \sin \theta
   \end{equation}
   ```
 
@@ -102,8 +102,8 @@ Language is detected by comparing kana+kanji vs. Latin-letter counts.
   →
   ```latex
   \begin{align}
-  f(x) &= \sin \theta \label{eq:eq1} \\
-  g(x) &= \cos \theta
+    f(x) &= \sin \theta \label{eq:eq1} \\
+    g(x) &= \cos \theta
   \end{align}
   ```
 
@@ -128,6 +128,36 @@ padding every block:
   blank line — never as literal text — and overrides math tightness, so it is the
   way to force a paragraph break right after an equation.
 
+## Indentation of environments
+
+Every line inside an environment is indented by **two spaces per nesting
+level**, counted from the `\begin{…}` / `\end{…}` pairs. This applies to all
+environments in the generated part (abstract + body) — those the converter
+emits (`equation`, `figure`, `table`, `tabular`, lists, callouts, `quote`,
+`subproblems`, …) and those the author wrote inside `$$ … $$` (`align`,
+`aligned`, `cases`, `pmatrix`, …):
+
+```latex
+\begin{equation}
+  f(x) =
+  \begin{cases}
+    1 & x > 0 \\
+    0 & \text{otherwise}
+  \end{cases}
+\end{equation}
+```
+
+- The indentation is **recomputed**, not added: any leading whitespace from the
+  source (or within math) is replaced by the depth-based indent. Leading
+  whitespace is insignificant in LaTeX, so the typeset result is unchanged.
+  Blank lines stay empty.
+- **`verbatim` is exempt**: its body and its `\end{verbatim}` line are copied
+  unchanged at column 0 (spaces before `\end{verbatim}` would print as an extra
+  line); only the `\begin{verbatim}` line is indented.
+- Text after an unescaped `%` is a comment and is not counted.
+- The template's own lines (preamble, `\begin{document}`) are not touched; the
+  body starts at column 0.
+
 ## Tables
 
 A blockquote **immediately above** a pipe table is its caption (the leading
@@ -150,12 +180,12 @@ Column alignment: `:---:` → `c`, `:---` → `l`, `---:` → `r`.
   \caption{テーブルの例．この場合は中央揃えとなっている．}
   \label{table:table1}
   \begin{tabular}{ cc }
-  \hline
-  a & b \\
-  \hline
-  1 & 2 \\
-  3 & 4 \\
-  \hline
+    \hline
+    a & b \\
+    \hline
+    1 & 2 \\
+    3 & 4 \\
+    \hline
   \end{tabular}
 \end{table}
 ```
@@ -313,10 +343,10 @@ Example:
 →
 ```latex
 \begin{callout}[{コーシー・シュワルツの不等式}]{thm}
-任意のベクトルに対して次が成り立つ．
-\begin{equation}
-|\braket{a, b}|^2 \le \braket{a, a} \braket{b, b}
-\end{equation}
+  任意のベクトルに対して次が成り立つ．
+  \begin{equation}
+    |\braket{a, b}|^2 \le \braket{a, a} \braket{b, b}
+  \end{equation}
 \end{callout}
 ```
 
@@ -331,10 +361,10 @@ A solution nested inside an exercise (callouts convert recursively):
 →
 ```latex
 \begin{callout}{exc}
-$1+1$ を計算せよ．
-\begin{sol}
-$2$ である．
-\end{sol}
+  $1+1$ を計算せよ．
+  \begin{sol}
+    $2$ である．
+  \end{sol}
 \end{callout}
 ```
 
@@ -397,17 +427,17 @@ $$
 問題文．
 
 \begin{subproblems}
-\item 同次方程式
-\begin{equation}
-\ddot{x}+\frac{c}{m}\dot{x}=0
-\end{equation}
-の一般解を示せ．
-\item 値を設定し
-\begin{enumerate}
-  \item ケース1
-  \item ケース2
-\end{enumerate}
-についてグラフを描け．
+  \item 同次方程式
+  \begin{equation}
+    \ddot{x}+\frac{c}{m}\dot{x}=0
+  \end{equation}
+  の一般解を示せ．
+  \item 値を設定し
+  \begin{enumerate}
+    \item ケース1
+    \item ケース2
+  \end{enumerate}
+  についてグラフを描け．
 \end{subproblems}
 ```
 

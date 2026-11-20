@@ -107,3 +107,6 @@ latexmk <basename>.tex
 - Never edit the source `.md`.
 - Never add personal data; keep `\author{names}`.
 - Convert grammar only; keep the author's wording intact.
+- Keep the layout: lines inside an environment are indented two spaces per
+  nesting level (`verbatim` bodies stay at column 0). Match it when inserting
+  or moving lines.
