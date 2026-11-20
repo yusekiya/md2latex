@@ -87,8 +87,8 @@ Language is detected by comparing kana+kanji vs. Latin-letter counts.
   \end{equation}
   ```
 
-- Content that already opens with an environment (`align`, `gather`, `alignat`,
-  `multline`, …) → keep the environment, drop the `$$` fence, and strip the
+- Content that already opens with a display environment (`align`, `gather`,
+  `alignat`, `multline`, …) → keep the environment, drop the `$$` fence, and strip the
   trailing `\\` on the last row:
 
   ```
@@ -107,6 +107,33 @@ Language is detected by comparing kana+kanji vs. Latin-letter counts.
   \end{align}
   ```
 
+- Content that opens with a **math-mode-only** environment (`aligned`,
+  `gathered`, `split`, `cases`, `pmatrix`, `array`, … — anything not in the
+  list below, including user-defined ones) → wrap in `equation` (emitting it
+  bare would be a LaTeX error); the trailing `\\` on its last row is stripped
+  the same way:
+
+  ```
+  $$
+  \begin{aligned}
+  x &= 1 \\
+  y &= 2 \\
+  \end{aligned} \tag{2}
+  $$
+  ```
+  →
+  ```latex
+  \begin{equation}
+    \begin{aligned}
+      x &= 1 \\
+      y &= 2
+    \end{aligned} \label{eq:eq2}
+  \end{equation}
+  ```
+
+  Kept as-is (display environments, also starred): `equation`, `align`,
+  `alignat`, `gather`, `multline`, `flalign`, `eqnarray`, and `subequations`
+  (`DISPLAY_MATH_ENVS` in the script).
 - `\tag{N}` → `\label{eq:eqN}` (placeholder; the agent may rename it to a
   semantic label such as `eq:sin_function`).
 - Inline math `$ … $` is unchanged (identical in LaTeX).

@@ -27,6 +27,25 @@ $$
 
 See Eq. (1) above. A footnote follows.\footnote{An existing LaTeX footnote.}
 
+A math-mode-only environment opening the block is wrapped in `equation`:
+
+$$
+\begin{aligned}
+x &= 1 \\
+y &= 2 \\
+\end{aligned} \tag{2}
+$$
+
+$$\begin{pmatrix} 1 & 0 \\ 0 & 1 \end{pmatrix}$$
+
+and a starred display environment stays as-is:
+
+$$
+\begin{align*}
+p &= q
+\end{align*}
+$$
+
 Nested math environments are indented by depth:
 
 $$

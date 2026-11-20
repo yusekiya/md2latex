@@ -637,7 +637,17 @@ def build_caption(bq_lines, inline):
 SECTION_BY_LEVEL = {2: "section", 3: "subsection", 4: "subsubsection",
                     5: "paragraph", 6: "subparagraph"}
 
-KNOWN_ENV_RE = re.compile(r"^\s*\\begin\{[A-Za-z*]+\}")
+KNOWN_ENV_RE = re.compile(r"^\s*\\begin\{([A-Za-z*]+)\}")
+# Environments that are a display equation on their own (used outside math
+# mode); $$ content opening with one is emitted as-is. Any other environment
+# (aligned, gathered, split, cases, pmatrix, array, user-defined, ...) only
+# works inside math mode, so it is wrapped in equation.
+DISPLAY_MATH_ENVS = {
+    base + star
+    for base in ("equation", "align", "alignat", "gather", "multline",
+                 "flalign", "eqnarray")
+    for star in ("", "*")
+} | {"subequations"}
 TAG_RE = re.compile(r"\\tag\{([^}]*)\}")
 ENV_NAME_RE = re.compile(r"\\(?:begin|end)\{([A-Za-z*]+)\}")
 
@@ -862,16 +872,22 @@ class Renderer:
     def r_math(self, b):
         inner = list(b["lines"])
         stripped = [ln for ln in inner if ln.strip() != ""]
-        if stripped and KNOWN_ENV_RE.match(stripped[0]):
-            return self._render_known_env(inner)
-        # plain $$...$$ -> equation
+        m = KNOWN_ENV_RE.match(stripped[0]) if stripped else None
+        if m:
+            # strip a trailing '\\' on the last row of the environment
+            self._strip_last_row_break(inner)
+            if m.group(1) in DISPLAY_MATH_ENVS:
+                text, _ = self._convert_tags("\n".join(inner))
+                return text
+        # plain $$...$$, or one opening with a math-mode-only env -> equation
         body = "\n".join(inner).strip("\n")
         body, _ = self._convert_tags(body)
         return "\\begin{equation}\n" + body + "\n\\end{equation}"
 
-    def _render_known_env(self, inner):
+    @staticmethod
+    def _strip_last_row_break(inner):
         # locate the final \end{env} and strip a trailing '\\' on the last
-        # content line before it (matches the spec's align example).
+        # content line before it (matches the spec's align example). In place.
         end_idx = None
         for k in range(len(inner) - 1, -1, -1):
             if re.match(r"^\s*\\end\{[A-Za-z*]+\}", inner[k]):
@@ -882,9 +898,6 @@ class Renderer:
                 if inner[k].strip() != "":
                     inner[k] = re.sub(r"\\\\\s*$", "", inner[k].rstrip())
                     break
-        text = "\n".join(inner)
-        text, _ = self._convert_tags(text)
-        return text
 
     def _convert_tags(self, text):
         labels = []
