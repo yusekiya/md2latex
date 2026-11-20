@@ -46,8 +46,9 @@ target.md | dir/ ──▶ (dir) collect *.md, natural order, pick abstract, dro
   subproblems; numbers `eq/fig/table` labels deterministically.
 - `Inline` — converts text spans only; protects inline code/math/URLs, converts
   citation wikilinks (via the `Citations.cite` callback; adjacent ones merged
-  into one `\cite{a,b}`), decoration/links/footnotes, escapes a minimal set of
-  specials. **Never** runs on math or code content.
+  into one `\cite{a,b}`; brackets enclosing only citations are dropped),
+  Markdown backslash escapes (→ the literal character, `\\` kept),
+  decoration/links/footnotes, escapes a minimal set of specials. **Never** runs on math or code content.
 - `load_md` / `collect_dir` — per-file frontmatter/H1/body (with source line
   offset); directory listing in natural order, abstract detection
   (`ABSTRACT_STEMS`), exclusion of cited reference notes from the chapters.

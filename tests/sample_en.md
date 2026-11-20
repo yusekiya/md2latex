@@ -48,6 +48,7 @@ $$
 | beta  | 2     |
 
 Percent signs like 50% and ampersands a & b are escaped in prose.
+Markdown escapes print literally: \[note\], \*not italic\*, snake\_case, \#tag, \$5 and \$6, a\~b, x\^2, \`tick\`, but $\{x\}$ is math.
 
 ## Theorems and callouts
 

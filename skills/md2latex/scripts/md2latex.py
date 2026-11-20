@@ -219,6 +219,28 @@ WIKILINK_RE = re.compile(r"(?<!!)\[\[([^\[\]\n]+?)\]\]")
 # whitespace / a comma between them) can be merged into a single \cite{a,b}.
 CITE_MARK_RE = re.compile(r"\x01([^\x01]+)\x01")
 CITE_GROUP_RE = re.compile(r"\x01[^\x01]+\x01(?:[ \t]*[,，、]?[ \t]*\x01[^\x01]+\x01)*")
+# Markdown backslash escape: '\' + ASCII punctuation (CommonMark). Matched
+# left to right, so '\\' is consumed as one pair.
+MD_ESCAPE_RE = re.compile(r"\\([!-/:-@\[-`{-~])")
+# LaTeX for the literal character an escape stands for; characters not listed
+# are emitted as-is ('\*' -> '*', '\(' -> '(', ...). '\\' is passed through
+# unchanged (LaTeX line break), as authors use it in LaTeX-flavoured Markdown.
+MD_ESCAPE_LATEX = {
+    "\\": "\\\\", "#": r"\#", "$": r"\$", "%": r"\%", "&": r"\&", "_": r"\_",
+    "{": r"\{", "}": r"\}", "~": r"\textasciitilde{}", "^": r"\textasciicircum{}",
+    "`": r"\textasciigrave{}", "|": r"\textbar{}", "<": r"\textless{}",
+    ">": r"\textgreater{}",
+}
+# Escaped brackets stay visible as markers until the end of Inline.convert so
+# that bracketed citations can be recognised; restored as {[} / {]} (braced so
+# they are never read as an optional argument, e.g. right after \item).
+ESC_LBRACK, ESC_RBRACK = "\x02", "\x03"
+# Square brackets (escaped or not) enclosing nothing but citations
+# ([[[A]]], \[[[A]], [[B]]\]): \cite already prints its own brackets, so these
+# would show up doubled ([[1]]). Not when followed by '(' -- then the brackets
+# are a Markdown link's text.
+BRACKETED_CITES_RE = re.compile(
+    r"[\[\x02][ \t]*(" + CITE_GROUP_RE.pattern + r")[ \t]*[\]\x03](?!\()")
 
 
 class Inline:
@@ -246,6 +268,14 @@ class Inline:
         keys = CITE_MARK_RE.findall(m.group(0))
         return self._ph("\\cite{" + ",".join(keys) + "}")
 
+    def _md_escape(self, m):
+        ch = m.group(1)
+        if ch == "[":
+            return ESC_LBRACK
+        if ch == "]":
+            return ESC_RBRACK
+        return self._ph(MD_ESCAPE_LATEX.get(ch, ch))
+
     def _ph(self, value):
         key = f"\x00{self._n}\x00"
         self._store[key] = value
@@ -257,16 +287,26 @@ class Inline:
         self._n = 0
         s = text
 
-        # 1. protect inline code `...`
-        s = re.sub(r"`([^`]+)`",
+        # 1. protect inline code `...` (an escaped \` does not open one)
+        s = re.sub(r"(?<!\\)`([^`]+)`",
                    lambda m: self._ph(_texttt(m.group(1))), s)
-        # 2. protect inline math $...$ (kept verbatim)
-        s = re.sub(r"(?<!\$)\$(?!\$)((?:\\\$|[^$])+?)\$(?!\$)",
+        # 2. protect inline math $...$ (kept verbatim); an escaped \$ never
+        #    opens one
+        s = re.sub(r"(?<![\\$])\$(?!\$)((?:\\\$|[^$])+?)\$(?!\$)",
                    lambda m: self._ph("$" + m.group(1) + "$"), s)
-        # 2b. Obsidian wikilinks to notes holding a BibTeX record -> \cite{key};
-        #     adjacent citations merge into one \cite{a,b}
-        if self.cite is not None and "[[" in s:
+        # 2a. Obsidian wikilinks to notes holding a BibTeX record -> cite
+        #     markers (before escapes, so a link's own '\|' still resolves)
+        has_links = self.cite is not None and "[[" in s
+        if has_links:
             s = WIKILINK_RE.sub(self._wikilink, s)
+        # 2b. Markdown backslash escapes -> the literal character (never runs
+        #     inside the math/code protected above)
+        if "\\" in s:
+            s = MD_ESCAPE_RE.sub(self._md_escape, s)
+        # 2c. drop brackets around citations only; adjacent citations merge
+        #     into one \cite{a,b}
+        if has_links:
+            s = BRACKETED_CITES_RE.sub(r"\1", s)
             s = CITE_GROUP_RE.sub(self._cite_group, s)
         # 3. links [text](url) -> \href{url}{text}; protect url from escaping
         s = re.sub(r"(?<!\!)\[([^\]]*)\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)",
@@ -284,7 +324,7 @@ class Inline:
         # 7. restore protected fragments
         for key, value in self._store.items():
             s = s.replace(key, value)
-        return s
+        return s.replace(ESC_LBRACK, "{[}").replace(ESC_RBRACK, "{]}")
 
 
 def _convert_footnotes(s):

@@ -250,6 +250,14 @@ Prior work \cite{smith2020,yamada2021} showed …
   (a note with several records → first one, plus a hint).
 - Citations separated only by whitespace and/or one comma (`,` `，` `、`) are
   merged into a single `\cite{a,b}`.
+- Square brackets — escaped `\[ … \]` (the usual Obsidian form, since bare
+  brackets read as a link) or bare — that enclose **only** citations are
+  dropped, since `\cite` prints its own brackets (keeping them would typeset
+  `[[1]]`): `\[[[Smith2020]]\]` → `\cite{smith2020}`,
+  `\[[[Smith2020]], [[山田2021]]\]` → `\cite{smith2020,yamada2021}`. Brackets
+  that also hold other text (`\[see [[Smith2020]]\]` → `{[}see
+  \cite{smith2020}{]}`), an unresolved wikilink, or are followed by `(` (a
+  Markdown link's text) are kept.
 - Every cited record is written to `<basename>.bib` **once** (deduplicated by
   key, case-insensitive). If the `.bib` already exists its content is kept
   verbatim and only keys not yet present are appended (an existing key is not
@@ -396,6 +404,26 @@ to a `quote` (title kept as a bold lead line) and a hint is emitted. (Both
 Decoration/escaping is **not** applied inside math or code. In prose, only the
 LaTeX specials `% & # _` are escaped (kept minimal so math/commands are not
 broken); other special characters needing escaping are surfaced via hints.
+
+### Markdown backslash escapes
+
+In prose, `\` + an ASCII punctuation character (CommonMark escapes) becomes
+that **literal character**, as Obsidian displays it — never the LaTeX command
+of the same spelling (`\[` would open display math, `\'` an accent, `\-` a
+hyphenation point):
+
+| Markdown | LaTeX |
+| :------- | :---- |
+| `\[` `\]` | `{[}` `{]}` (braced so never read as an optional argument) |
+| `\_` `\#` `\%` `\&` `\$` `\{` `\}` | `\_` `\#` `\%` `\&` `\$` `\{` `\}` |
+| `` \` `` `\~` `\^` `\|` `\<` `\>` | `\textasciigrave{}` `\textasciitilde{}` `\textasciicircum{}` `\textbar{}` `\textless{}` `\textgreater{}` |
+| `\*` `\-` `\(` `\'` `\,` … (other punctuation) | the character itself |
+| `\\` | `\\` unchanged (LaTeX line break) |
+
+- Math and inline code are protected first, so `$\{x\}$` is untouched.
+- An escaped `\$` never opens inline math (`\$5 and \$6` stays prose).
+- Consequence: LaTeX accent/spacing commands written directly in prose
+  (`\'e`, `\,`) are not passed through; write them as Unicode or inside math.
 
 ## exercise template: subproblems
 
